@@ -46,6 +46,7 @@ import re as _re
 
 _ACCESSORY_KEYWORDS = _re.compile(
     r"\b(?:watch|montre|bracelet|smart\s*band|band\s*\d"
+    r"|blackview\s*[xz]\d|airbuds"
     r"|airtags?|air\s*tags?|airpods?|earpods?|buds|pencil"
     r"|casque|écouteurs?|enceinte|speaker|haut.parleur"
     r"|chargeur|adaptateur|câble|coque|étui|housse"
