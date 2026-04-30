@@ -78,7 +78,7 @@ export function PhoneGrid({ phones, brands }: Props) {
           </button>
         )}
 
-        <span className="result-count">{filtered.length} terminal{filtered.length > 1 ? "aux" : ""}</span>
+        <span className="result-count">{filtered.length > 1 ? `${filtered.length} terminaux` : `${filtered.length} terminal`}</span>
       </div>
 
       {filtered.length === 0 ? (

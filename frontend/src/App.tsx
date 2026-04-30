@@ -131,7 +131,7 @@ export default function App() {
 
       <footer className="app-footer">
         <p>
-          {phones.length} terminal{phones.length > 1 ? "aux" : ""} en base
+          {phones.length > 1 ? `${phones.length} terminaux` : `${phones.length} terminal`} en base
           {selectedOperator
             ? ` · ${operators.find((o) => o.id === selectedOperator)?.label ?? selectedOperator}`
             : " · Tous vendeurs"}
