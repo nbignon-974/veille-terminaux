@@ -3,9 +3,9 @@
   publish   = "frontend/dist"
 
 [[edge_functions]]
-  function         = "auth"
-  path             = "/*"
-  excluded_patterns = ["/assets/*", "/*.ico", "/*.png", "/*.svg", "/*.webp", "/*.woff2", "/*.woff", "/*.ttf"]
+  function        = "auth"
+  path            = "/*"
+  excludedPattern = ["/assets/*", "/*.ico", "/*.png", "/*.svg", "/*.webp", "/*.woff2", "/*.woff", "/*.ttf"]
 
 [[redirects]]
   from   = "/*"
