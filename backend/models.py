@@ -23,7 +23,7 @@ class Phone(Base):
     page_url: Mapped[Optional[str]] = mapped_column(String(512), nullable=True)
     operator: Mapped[str] = mapped_column(String(32), default="sfr_re")
     product_type: Mapped[str] = mapped_column(String(32), default="phone")
-    is_refurbished: Mapped[bool] = mapped_column(Integer, default=0)
+    is_refurbished: Mapped[int] = mapped_column(Integer, default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=func.now())
 
     snapshots: Mapped[list["PriceSnapshot"]] = relationship(
@@ -42,7 +42,7 @@ class PriceSnapshot(Base):
     scraped_at: Mapped[datetime] = mapped_column(DateTime, default=func.now())
     price_nu: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     promotion: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    available: Mapped[bool] = mapped_column(Integer, default=1)
+    available: Mapped[int] = mapped_column(Integer, default=1)
 
     phone: Mapped["Phone"] = relationship("Phone", back_populates="snapshots")
     plan_prices: Mapped[list["PlanPrice"]] = relationship(
