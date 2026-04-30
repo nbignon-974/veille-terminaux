@@ -168,7 +168,7 @@ def persist_results(results: list[PhoneData], db, scrape_run_id: int, operator: 
                 page_url=data.page_url,
                 operator=operator,
                 product_type=data.product_type,
-                is_refurbished=data.is_refurbished,
+                is_refurbished=int(data.is_refurbished),
             )
             db.add(phone)
             db.flush()
@@ -176,7 +176,7 @@ def persist_results(results: list[PhoneData], db, scrape_run_id: int, operator: 
             phone.image_url = data.image_url or phone.image_url
             phone.page_url = data.page_url or phone.page_url
             phone.product_type = data.product_type
-            phone.is_refurbished = data.is_refurbished
+            phone.is_refurbished = int(data.is_refurbished)
 
         snapshot = PriceSnapshot(
             phone_id=phone.id,
@@ -184,7 +184,7 @@ def persist_results(results: list[PhoneData], db, scrape_run_id: int, operator: 
             scraped_at=scraped_at,
             price_nu=data.price_nu,
             promotion=data.promotion,
-            available=True,
+            available=1,
         )
         db.add(snapshot)
         db.flush()
