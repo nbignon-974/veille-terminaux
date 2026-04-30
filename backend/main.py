@@ -328,6 +328,20 @@ def list_scrape_runs(db: Session = Depends(get_db)):
     return runs
 
 
+@app.delete("/scrape/{run_id}", status_code=200)
+def cancel_scrape(run_id: int, db: Session = Depends(get_db)):
+    run = db.query(ScrapeRun).filter(ScrapeRun.id == run_id).first()
+    if not run:
+        raise HTTPException(status_code=404, detail="Run not found")
+    if run.status not in ("pending", "running"):
+        raise HTTPException(status_code=409, detail="Run is not in progress")
+    run.status = "error"
+    run.error_message = "Cancelled manually"
+    run.finished_at = datetime.now(timezone.utc)
+    db.commit()
+    return {"detail": f"Run {run_id} cancelled"}
+
+
 @app.get("/scrape/{run_id}", response_model=ScrapeStatusOut)
 def scrape_status(run_id: int, db: Session = Depends(get_db)):
     run = db.query(ScrapeRun).filter(ScrapeRun.id == run_id).first()
