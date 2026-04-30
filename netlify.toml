@@ -2,6 +2,10 @@
   command   = "cd frontend && npm install && npm run build"
   publish   = "frontend/dist"
 
+[[edge_functions]]
+  function = "auth"
+  path     = "/*"
+
 [[redirects]]
   from   = "/*"
   to     = "/index.html"
