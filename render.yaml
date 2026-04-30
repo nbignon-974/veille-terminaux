@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: veille-terminaux-backend
+    runtime: docker
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    plan: free
+    envVars:
+      - key: DATABASE_URL
+        sync: false   # set manually in Render dashboard
+      - key: ALLOWED_ORIGINS
+        sync: false   # set to your Netlify URL, e.g. https://your-app.netlify.app
