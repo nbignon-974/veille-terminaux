@@ -39,10 +39,32 @@ function getCookie(header: string, name: string): string | null {
   return null;
 }
 
+async function timingSafeStringEqual(a: string, b: string): Promise<boolean> {
+  const enc = new TextEncoder();
+  const key = await crypto.subtle.generateKey(
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"],
+  );
+  const [sigA, sigB] = await Promise.all([
+    crypto.subtle.sign("HMAC", key, enc.encode(a)),
+    crypto.subtle.sign("HMAC", key, enc.encode(b)),
+  ]);
+  const a8 = new Uint8Array(sigA);
+  const b8 = new Uint8Array(sigB);
+  let diff = 0;
+  for (let i = 0; i < a8.length; i++) diff |= a8[i] ^ b8[i];
+  return diff === 0;
+}
+
 export default async function auth(request: Request, context: Context) {
   const user = Deno.env.get("BASIC_AUTH_USER") ?? "admin";
-  const password = Deno.env.get("BASIC_AUTH_PASSWORD") ?? "";
-  const secret = Deno.env.get("SESSION_SECRET") ?? "change-me-in-production";
+  const password = Deno.env.get("BASIC_AUTH_PASSWORD");
+  const secret = Deno.env.get("SESSION_SECRET");
+
+  if (!password || !secret) {
+    return new Response("Configuration serveur manquante", { status: 500 });
+  }
 
   // Cookie de session valide → passage immédiat sans vérification
   const cookieHeader = request.headers.get("cookie") ?? "";
@@ -51,11 +73,11 @@ export default async function auth(request: Request, context: Context) {
     return context.next();
   }
 
-  // Vérification Basic Auth
-  const authHeader = request.headers.get("Authorization");
+  // Vérification Basic Auth (timing-safe)
+  const authHeader = request.headers.get("Authorization") ?? "";
   const expected = "Basic " + btoa(`${user}:${password}`);
 
-  if (!authHeader || authHeader !== expected) {
+  if (!await timingSafeStringEqual(authHeader, expected)) {
     return new Response("Accès non autorisé", {
       status: 401,
       headers: {
