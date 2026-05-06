@@ -56,9 +56,12 @@ export interface Operator {
 }
 
 const BASE = import.meta.env.VITE_API_URL ?? "";
+const API_KEY = import.meta.env.VITE_API_KEY ?? "";
 
 async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(`${BASE}${path}`, init);
+  const headers = new Headers(init?.headers);
+  if (API_KEY) headers.set("X-API-Key", API_KEY);
+  const res = await fetch(`${BASE}${path}`, { ...init, headers });
   if (!res.ok) {
     const text = await res.text().catch(() => res.statusText);
     throw new Error(`${res.status} ${text}`);

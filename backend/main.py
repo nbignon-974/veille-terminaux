@@ -1,12 +1,14 @@
 import asyncio
 import logging
 import os
+import secrets
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from typing import Optional
 
-from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException
+from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -74,6 +76,19 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="Veille Terminaux", lifespan=lifespan)
+
+_API_KEY = os.environ.get("API_KEY", "")
+
+@app.middleware("http")
+async def require_api_key(request: Request, call_next):
+    # Allow CORS preflight requests without auth
+    if request.method == "OPTIONS":
+        return await call_next(request)
+    if _API_KEY:
+        provided = request.headers.get("X-API-Key", "")
+        if not secrets.compare_digest(provided, _API_KEY):
+            return JSONResponse(status_code=401, content={"detail": "Invalid or missing API key"})
+    return await call_next(request)
 
 _raw_origins = os.environ.get("ALLOWED_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173")
 _allow_origins = [o.strip() for o in _raw_origins.split(",") if o.strip()]
