@@ -231,7 +231,7 @@ def list_phones(
     if product_type:
         query = query.filter(Phone.product_type == product_type)
     if is_refurbished is not None:
-        query = query.filter(Phone.is_refurbished == is_refurbished)
+        query = query.filter(Phone.is_refurbished == int(is_refurbished))
     if brand:
         query = query.filter(Phone.brand.ilike(f"%{brand}%"))
     if search:
