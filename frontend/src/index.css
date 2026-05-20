@@ -609,3 +609,22 @@ body {
 .compare-table a:hover {
   text-decoration: underline;
 }
+
+.compare-prices {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.compare-price-line {
+  display: flex;
+  align-items: baseline;
+  gap: 0.35rem;
+}
+
+.engagement-label {
+  font-size: 0.72rem;
+  color: var(--text-light);
+  font-weight: 400;
+  white-space: nowrap;
+}

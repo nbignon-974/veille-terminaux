@@ -178,23 +178,46 @@ export function PriceCompare({ phones }: Props) {
                 {operatorKeys.map((op) => {
                   const v = g.vendors.find((x) => x.operator === op);
                   const isBest = v && v.price === best.price;
+                  const planPrices = v?.phone.latest_snapshot?.plan_prices ?? [];
+                  // Cheapest price_device per engagement tier
+                  const tiers = Object.entries(
+                    planPrices
+                      .filter((pp) => pp.price_device != null)
+                      .reduce((acc, pp) => {
+                        const k = pp.engagement_months ?? 0;
+                        if (acc[k] == null || pp.price_device! < acc[k]) acc[k] = pp.price_device!;
+                        return acc;
+                      }, {} as Record<number, number>)
+                  ).sort(([a], [b]) => Number(a) - Number(b));
                   return (
                     <td
                       key={op}
                       className={isBest ? "compare-best" : ""}
+                      style={{ whiteSpace: "normal" }}
                     >
                       {v ? (
-                        v.phone.page_url ? (
-                          <a
-                            href={v.phone.page_url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                          >
-                            {v.price.toFixed(2).replace(".", ",")} €
-                          </a>
-                        ) : (
-                          `${v.price.toFixed(2).replace(".", ",")} €`
-                        )
+                        <div className="compare-prices">
+                          {v.phone.latest_snapshot?.price_nu != null && (
+                            <div className="compare-price-line">
+                              {v.phone.page_url ? (
+                                <a href={v.phone.page_url} target="_blank" rel="noopener noreferrer">
+                                  {v.price.toFixed(2).replace(".", ",")} €
+                                </a>
+                              ) : (
+                                <span>{v.price.toFixed(2).replace(".", ",")} €</span>
+                              )}
+                              <span className="engagement-label">comptant</span>
+                            </div>
+                          )}
+                          {tiers.map(([months, price]) => (
+                            <div key={months} className="compare-price-line">
+                              <span>{price.toFixed(2).replace(".", ",")} €</span>
+                              <span className="engagement-label">
+                                {Number(months) === 0 ? "sans eng." : `${months} mois`}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
                       ) : (
                         <span className="compare-na">—</span>
                       )}
