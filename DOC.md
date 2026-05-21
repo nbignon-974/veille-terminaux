@@ -9,39 +9,90 @@ L'application scrape périodiquement les catalogues en ligne de 10 vendeurs, sto
 
 ## Stack technique
 
-| Couche    | Technologie                                  | Version  |
-|-----------|----------------------------------------------|----------|
-| Backend   | Python / FastAPI / Uvicorn                   | 3.9 / 0.115 / 0.32 |
-| ORM       | SQLAlchemy                                   | 2.0      |
-| Base      | SQLite (fichier local `veille_terminaux.db`) | —        |
-| Scraping  | Playwright (Chromium headless)               | 1.49     |
-| Frontend  | React / TypeScript / Vite                    | 18 / 5.7 / 6.0 |
-| Graphiques| Recharts                                     | 2.13     |
+| Couche     | Technologie                              | Version        |
+|------------|------------------------------------------|----------------|
+| Backend    | Python / FastAPI / Uvicorn               | 3.9 / 0.115.6 / 0.32.1 |
+| ORM        | SQLAlchemy                               | 2.0.36         |
+| BDD locale | SQLite (dev)                             | —              |
+| BDD prod   | PostgreSQL (Supabase)                    | —              |
+| Scraping   | Playwright (Chromium headless)           | 1.49.0         |
+| Frontend   | React / TypeScript / Vite                | 18.3 / 5.7 / 6.0 |
+| Graphiques | Recharts                                 | 2.13.3         |
+| Auth       | Edge Function Deno (HMAC-SHA256 cookie)  | —              |
 
 ---
 
-## Architecture
+## Architecture de déploiement
 
 ```
-┌──────────────────────────────────────────────────────────┐
-│  Frontend  (localhost:5173)                               │
-│  React + TypeScript + Recharts                           │
-│  Vite dev proxy → /phones, /scrape, /brands, /operators  │
-└──────────────────┬───────────────────────────────────────┘
-                   │  REST JSON
-┌──────────────────▼───────────────────────────────────────┐
-│  Backend  (localhost:8000)                                │
-│  FastAPI + Uvicorn --reload                              │
-│                                                          │
-│  ┌─────────────────────────────────────────────────────┐ │
-│  │  Scrapers (Playwright headless)                     │ │
-│  │  sfr_re │ zeop │ smartshop │ phenix │ leclic │      │ │
-│  │  bvallee │ ravate │ infinytech │ distripc │ darty  │ │
-│  └─────────────────────────────────────────────────────┘ │
-│                                                          │
-│  SQLAlchemy ──► SQLite (veille_terminaux.db)             │
-└──────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────┐
+│  Utilisateur (navigateur)                                           │
+└──────────────────────┬──────────────────────────────────────────────┘
+                       │ HTTPS
+┌──────────────────────▼──────────────────────────────────────────────┐
+│  Netlify  (CDN mondial)                                             │
+│  https://veille-terminaux-orange-reunion.netlify.app                │
+│                                                                     │
+│  ┌──────────────────────────────────────────────────────────────┐   │
+│  │  Edge Function : auth (Deno)                                 │   │
+│  │  • Vérification Basic Auth sur 1ère visite                   │   │
+│  │  • Émet un cookie de session signé HMAC-SHA256 (7 jours)     │   │
+│  │  • Requêtes suivantes : validation cookie uniquement          │   │
+│  │  • Assets statiques exclus (/assets/*, fonts, images)        │   │
+│  └──────────────────────────────────────────────────────────────┘   │
+│                                                                     │
+│  Frontend statique (build Vite)                                     │
+│  React + TypeScript + Recharts                                      │
+│  VITE_API_URL → https://veille-terminaux-backend.onrender.com       │
+└──────────────────────┬──────────────────────────────────────────────┘
+                       │ REST JSON / CORS
+┌──────────────────────▼──────────────────────────────────────────────┐
+│  Render  (Web Service Docker)                                       │
+│  https://veille-terminaux-backend.onrender.com                      │
+│                                                                     │
+│  FastAPI + Uvicorn                                                  │
+│  ALLOWED_ORIGINS = https://veille-terminaux-orange-reunion.netlify.app │
+│                                                                     │
+│  ┌──────────────────────────────────────────────────────────────┐   │
+│  │  Scrapers Playwright (Chromium headless)                     │   │
+│  │  sfr_re │ zeop │ smartshop │ phenix │ leclic                 │   │
+│  │  bvallee │ ravate │ infinytech │ distripc │ darty            │   │
+│  └──────────────────────────────────────────────────────────────┘   │
+│                                                                     │
+│  SQLAlchemy ──► PostgreSQL (Supabase)                                │
+└──────────────────────┬──────────────────────────────────────────────┘
+                       │ DATABASE_URL (connection string)
+┌──────────────────────▼──────────────────────────────────────────────┐
+│  Supabase  (PostgreSQL managé)                                      │
+│  Base de données partagée, accès via connection string              │
+└─────────────────────────────────────────────────────────────────────┘
 ```
+
+### CI/CD
+Tout push sur la branche `main` déclenche automatiquement :
+- **Netlify** : rebuild du frontend + redéploiement de l'edge function
+- **Render** : rebuild de l'image Docker + redéploiement du backend
+
+---
+
+## Variables d'environnement
+
+### Render (backend)
+| Clé               | Valeur                                                        |
+|-------------------|---------------------------------------------------------------|
+| `DATABASE_URL`    | Connection string PostgreSQL Supabase                         |
+| `ALLOWED_ORIGINS` | `https://veille-terminaux-orange-reunion.netlify.app` (sans `/`) |
+
+### Netlify (frontend + edge function)
+| Clé                  | Valeur                                                     |
+|----------------------|------------------------------------------------------------|
+| `VITE_API_URL`       | `https://veille-terminaux-backend.onrender.com`            |
+| `BASIC_AUTH_USER`    | Identifiant de connexion                                   |
+| `BASIC_AUTH_PASSWORD`| Mot de passe de connexion                                  |
+| `SESSION_SECRET`     | Clé HMAC aléatoire (générer via `openssl rand -base64 32`) |
+
+> ⚠️ `SESSION_SECRET` doit être marquée **secret** dans Netlify.  
+> ⚠️ `VITE_API_URL` est compilée au build — tout changement nécessite un redéploiement Netlify.
 
 ---
 

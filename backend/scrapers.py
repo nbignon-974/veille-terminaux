@@ -9,7 +9,7 @@ from typing import Optional
 logger = logging.getLogger(__name__)
 
 OPERATORS = {
-    "sfr_re": "SFR Réunion",
+    "sfr_re": "SRR",
     "zeop": "Zeop Store",
     "smartshop": "SmartShop",
     "phenix": "Phenix Store",
@@ -18,7 +18,8 @@ OPERATORS = {
     "ravate": "Ravate",
     "infinytech": "Infinytech",
     "distripc": "DistriPC",
-    "darty": "Darty Réunion",
+    "darty": "Darty",
+    "orange_re": "Orange",
 }
 
 

@@ -67,7 +67,7 @@ export function PhoneCard({ phone }: Props) {
               <p className="phone-promo">🏷 {snap.promotion}</p>
             )}
 
-            {snap.plan_prices.length > 0 && (
+            {snap.plan_prices.filter((pp) => pp.engagement_months === 0 || pp.engagement_months === 24).length > 0 && (
               <table className="plan-table">
                 <thead>
                   <tr>
@@ -76,12 +76,14 @@ export function PhoneCard({ phone }: Props) {
                   </tr>
                 </thead>
                 <tbody>
-                  {snap.plan_prices.map((pp, i) => (
-                    <tr key={i}>
-                      <td><strong>{formatPrice(pp.price_device)}</strong></td>
-                      <td>{abbrevPlan(pp.plan_name)}</td>
-                    </tr>
-                  ))}
+                  {snap.plan_prices
+                    .filter((pp) => pp.engagement_months === 0 || pp.engagement_months === 24)
+                    .map((pp, i) => (
+                      <tr key={i}>
+                        <td><strong>{formatPrice(pp.price_device)}</strong></td>
+                        <td>{abbrevPlan(pp.plan_name)}</td>
+                      </tr>
+                    ))}
                 </tbody>
               </table>
             )}

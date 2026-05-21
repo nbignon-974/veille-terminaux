@@ -158,17 +158,36 @@ def _parse_bvallee_name(
     return brand, model, storage, color
 
 
+async def _trigger_lazy_prices(page):
+    """Bureau Vallée renders prices lazily on scroll. Scroll the page top→bottom
+    to force all .c-price__price to render, then wait for skeletons to clear."""
+    height = await page.evaluate("document.body.scrollHeight")
+    step = 800
+    for y in range(0, height + step, step):
+        await page.evaluate(f"window.scrollTo(0, {y})")
+        await asyncio.sleep(0.3)
+    try:
+        await page.wait_for_function(
+            "() => document.querySelectorAll('.c-productCard__priceWrapper .react-loading-skeleton').length === 0",
+            timeout=10000,
+        )
+    except Exception:
+        logger.warning("Some prices may still be skeleton-loading; extracting what's available")
+
+
 async def run_scrape(on_progress=None) -> list[PhoneData]:
     """Scrape Bureau Vallée Réunion smartphone catalogue."""
     results: list[PhoneData] = []
 
     async with async_playwright() as pw:
         browser = await pw.chromium.launch(headless=True)
-        page = await browser.new_page()
+        page = await browser.new_page(viewport={"width": 1400, "height": 900})
 
         logger.info("Loading Bureau Vallee catalogue...")
         try:
-            await page.goto(BASE_URL, wait_until="networkidle", timeout=30000)
+            await page.goto(BASE_URL, wait_until="domcontentloaded", timeout=30000)
+            await page.wait_for_selector(".c-productCard", timeout=15000)
+            await _trigger_lazy_prices(page)
         except Exception as e:
             logger.error("Failed to load Bureau Vallee: %s", e)
             await browser.close()
@@ -186,8 +205,9 @@ async def run_scrape(on_progress=None) -> list[PhoneData]:
         for i, url in enumerate(page_urls):
             if i > 0:
                 logger.info("Fetching page %d/%d...", i + 1, total_pages)
-                await page.goto(url, wait_until="networkidle", timeout=30000)
-                await asyncio.sleep(0.5)
+                await page.goto(url, wait_until="domcontentloaded", timeout=30000)
+                await page.wait_for_selector(".c-productCard", timeout=15000)
+                await _trigger_lazy_prices(page)
 
             products = await page.evaluate(_EXTRACT_JS)
             for p in products:

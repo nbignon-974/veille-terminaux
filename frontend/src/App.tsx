@@ -1,7 +1,28 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { api, Operator, Phone } from "./api";
 import { PhoneGrid } from "./components/PhoneGrid";
 import { ScrapeButton } from "./components/ScrapeButton";
+
+type PriceRange = "" | "0-200" | "200-500" | "500-1000" | "1000+";
+
+const PRICE_RANGES: { key: PriceRange; label: string }[] = [
+  { key: "", label: "Tous prix" },
+  { key: "0-200", label: "< 200 €" },
+  { key: "200-500", label: "200 – 500 €" },
+  { key: "500-1000", label: "500 – 1000 €" },
+  { key: "1000+", label: "> 1000 €" },
+];
+
+function inPriceRange(phone: Phone, range: PriceRange): boolean {
+  if (!range) return true;
+  const price = phone.latest_snapshot?.price_nu;
+  if (price == null) return false;
+  if (range === "0-200") return price < 200;
+  if (range === "200-500") return price >= 200 && price < 500;
+  if (range === "500-1000") return price >= 500 && price < 1000;
+  if (range === "1000+") return price >= 1000;
+  return true;
+}
 
 export default function App() {
   const [phones, setPhones] = useState<Phone[]>([]);
@@ -10,6 +31,7 @@ export default function App() {
   const [selectedOperator, setSelectedOperator] = useState<string>("");
   const [productType, setProductType] = useState<string>("phone");
   const [showRefurbished, setShowRefurbished] = useState<string>("");
+  const [priceRange, setPriceRange] = useState<PriceRange>("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -41,18 +63,27 @@ export default function App() {
     loadData();
   }, [loadData]);
 
+  const filteredPhones = useMemo(
+    () => phones.filter((p) => inPriceRange(p, priceRange)),
+    [phones, priceRange]
+  );
+
   return (
     <div className="app">
       <header className="app-header">
         <div className="header-content">
-          <div className="header-title">
+          <div className="header-top">
             <h1>Veille Tarifaire Terminaux</h1>
+            <ScrapeButton onScrapeComplete={loadData} operators={operators} />
+          </div>
+          <div className="header-separator" />
+          <div className="header-title">
             <div className="operator-tabs">
               <button
                 className={!selectedOperator ? "active" : ""}
                 onClick={() => setSelectedOperator("")}
               >
-                Tous
+                Tous vendeurs
               </button>
               {operators.map((op) => (
                 <button
@@ -104,8 +135,18 @@ export default function App() {
                 Reconditionné
               </button>
             </div>
+            <div className="product-type-tabs">
+              {PRICE_RANGES.map(({ key, label }) => (
+                <button
+                  key={key}
+                  className={priceRange === key ? "active" : ""}
+                  onClick={() => setPriceRange(key)}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
           </div>
-          <ScrapeButton onScrapeComplete={loadData} operators={operators} />
         </div>
       </header>
 
@@ -125,13 +166,13 @@ export default function App() {
         )}
 
         {!error && (
-          <PhoneGrid phones={phones} brands={brands} />
+          <PhoneGrid phones={filteredPhones} brands={brands} />
         )}
       </main>
 
       <footer className="app-footer">
         <p>
-          {phones.length > 1 ? `${phones.length} terminaux` : `${phones.length} terminal`} en base
+          {filteredPhones.length > 1 ? `${filteredPhones.length} terminaux` : `${filteredPhones.length} terminal`} en base
           {selectedOperator
             ? ` · ${operators.find((o) => o.id === selectedOperator)?.label ?? selectedOperator}`
             : " · Tous vendeurs"}

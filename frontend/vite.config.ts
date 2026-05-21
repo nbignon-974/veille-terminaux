@@ -9,6 +9,7 @@ export default defineConfig({
       "/scrape": "http://localhost:8000",
       "/brands": "http://localhost:8000",
       "/operators": "http://localhost:8000",
+      "/import": "http://localhost:8000",
     },
   },
 });

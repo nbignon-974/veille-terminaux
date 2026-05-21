@@ -4,6 +4,7 @@ import { api, Operator, ScrapeRun, ScrapeStatus } from "../api";
 const OPERATOR_SHORT: Record<string, string> = {
   sfr_re: "SFR",
   zeop: "Zeop",
+  orange_re: "Orange",
 };
 
 interface Props {
@@ -16,6 +17,8 @@ export function ScrapeButton({ onScrapeComplete, operators }: Props) {
   const [activeRun, setActiveRun] = useState<ScrapeStatus | null>(null);
   const [runs, setRuns] = useState<ScrapeRun[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [orangeImporting, setOrangeImporting] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
@@ -71,6 +74,24 @@ export function ScrapeButton({ onScrapeComplete, operators }: Props) {
 
   useEffect(() => () => stopPolling(), []);
 
+  const handleOrangeImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    // Reset input so the same file can be re-imported
+    e.target.value = "";
+    setError(null);
+    setOrangeImporting(true);
+    try {
+      await api.importOrangeCsv(file);
+      await api.getScrapeRuns().then(setRuns).catch(() => {});
+      onScrapeComplete();
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setOrangeImporting(false);
+    }
+  };
+
   const isRunning = activeRun !== null && (activeRun.status === "pending" || activeRun.status === "running");
   const pct = activeRun && activeRun.phones_found > 0
     ? Math.round((activeRun.phones_scraped / activeRun.phones_found) * 100)
@@ -85,7 +106,7 @@ export function ScrapeButton({ onScrapeComplete, operators }: Props) {
           onChange={(e) => setSelectedOperator(e.target.value)}
           disabled={isRunning}
         >
-          {operators.map((op) => (
+          {operators.filter((op) => op.id !== "orange_re").map((op) => (
             <option key={op.id} value={op.id}>{op.label}</option>
           ))}
         </select>
@@ -95,6 +116,20 @@ export function ScrapeButton({ onScrapeComplete, operators }: Props) {
           disabled={isRunning}
         >
           {isRunning ? "Collecte en cours…" : "Lancer une collecte"}
+        </button>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".csv"
+          style={{ display: "none" }}
+          onChange={handleOrangeImport}
+        />
+        <button
+          className="scrape-btn scrape-btn-orange"
+          onClick={() => fileInputRef.current?.click()}
+          disabled={orangeImporting || isRunning}
+        >
+          {orangeImporting ? "Import Orange…" : "Importer CSV Orange"}
         </button>
       </div>
 

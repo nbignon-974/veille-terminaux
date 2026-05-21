@@ -6,7 +6,7 @@ from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from typing import Optional
 
-from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, Request
+from fastapi import BackgroundTasks, Depends, FastAPI, File, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
@@ -388,3 +388,43 @@ def list_brands(operator: Optional[str] = None, db: Session = Depends(get_db)):
 @app.get("/operators")
 def list_operators():
     return [{"id": k, "label": v} for k, v in OPERATORS.items()]
+
+
+@app.post("/import/orange", response_model=ScrapeRunOut)
+async def import_orange_csv(
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+):
+    from scraper_orange import parse_orange_csv
+
+    content = await file.read()
+    try:
+        results = parse_orange_csv(content)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    run = ScrapeRun(
+        status="running",
+        operator="orange_re",
+        phones_found=len(results),
+        phones_scraped=0,
+    )
+    db.add(run)
+    db.commit()
+    db.refresh(run)
+
+    try:
+        persist_results(results, db, run.id, "orange_re")
+    except Exception as e:
+        run.status = "error"
+        run.error_message = str(e)
+        run.finished_at = datetime.now(timezone.utc)
+        db.commit()
+        raise HTTPException(status_code=500, detail=str(e))
+
+    run.status = "done"
+    run.phones_scraped = len(results)
+    run.finished_at = datetime.now(timezone.utc)
+    db.commit()
+    db.refresh(run)
+    return run

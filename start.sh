@@ -7,6 +7,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
 echo "▶ Démarrage du backend FastAPI sur http://localhost:8000 …"
 cd "$SCRIPT_DIR/backend"
+set -a; [ -f .env ] && source .env; set +a
 "$SCRIPT_DIR/.venv/bin/uvicorn" main:app --host 0.0.0.0 --port 8000 --reload &
 BACKEND_PID=$!
 

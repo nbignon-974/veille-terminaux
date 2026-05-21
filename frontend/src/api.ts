@@ -100,4 +100,17 @@ export const api = {
     apiFetch<ScrapeStatus>(`/scrape/${runId}`),
 
   getScrapeRuns: () => apiFetch<ScrapeRun[]>("/scrape/runs"),
+
+  importOrangeCsv: async (file: File): Promise<ScrapeRun> => {
+    const form = new FormData();
+    form.append("file", file);
+    const headers = new Headers();
+    if (API_KEY) headers.set("X-API-Key", API_KEY);
+    const res = await fetch(`${BASE}/import/orange`, { method: "POST", body: form, headers });
+    if (!res.ok) {
+      const text = await res.text().catch(() => res.statusText);
+      throw new Error(`${res.status} ${text}`);
+    }
+    return res.json() as Promise<ScrapeRun>;
+  },
 };
