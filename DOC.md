@@ -14,7 +14,7 @@ L'application scrape périodiquement les catalogues en ligne de 10 vendeurs, sto
 | Backend    | Python / FastAPI / Uvicorn               | 3.9 / 0.115.6 / 0.32.1 |
 | ORM        | SQLAlchemy                               | 2.0.36         |
 | BDD locale | SQLite (dev)                             | —              |
-| BDD prod   | PostgreSQL (Supabase)                    | —              |
+| BDD prod   | PostgreSQL (Neon)                        | 17             |
 | Scraping   | Playwright (Chromium headless)           | 1.49.0         |
 | Frontend   | React / TypeScript / Vite                | 18.3 / 5.7 / 6.0 |
 | Graphiques | Recharts                                 | 2.13.3         |
@@ -59,12 +59,13 @@ L'application scrape périodiquement les catalogues en ligne de 10 vendeurs, sto
 │  │  bvallee │ ravate │ infinytech │ distripc │ darty            │   │
 │  └──────────────────────────────────────────────────────────────┘   │
 │                                                                     │
-│  SQLAlchemy ──► PostgreSQL (Supabase)                                │
+│  SQLAlchemy ──► PostgreSQL (Neon)                                    │
 └──────────────────────┬──────────────────────────────────────────────┘
                        │ DATABASE_URL (connection string)
 ┌──────────────────────▼──────────────────────────────────────────────┐
-│  Supabase  (PostgreSQL managé)                                      │
-│  Base de données partagée, accès via connection string              │
+│  Neon  (PostgreSQL serverless managé)                               │
+│  Région Europe (Frankfurt) — projet `veille-terminaux`              │
+│  Endpoint direct (sans pooler) — autosuspend après 5 min d'inactivité│
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -80,7 +81,7 @@ Tout push sur la branche `main` déclenche automatiquement :
 ### Render (backend)
 | Clé               | Valeur                                                        |
 |-------------------|---------------------------------------------------------------|
-| `DATABASE_URL`    | Connection string PostgreSQL Supabase                         |
+| `DATABASE_URL`    | Connection string PostgreSQL Neon (endpoint direct, `?sslmode=require`) |
 | `ALLOWED_ORIGINS` | `https://veille-terminaux-orange-reunion.netlify.app` (sans `/`) |
 
 ### Netlify (frontend + edge function)

@@ -1,30 +1,34 @@
 # Plan de déploiement — Veille Terminaux
 
-Déploiement de la solution sur **Render** (backend Docker + PostgreSQL) et **Netlify** (frontend statique), avec CI/CD automatique via **GitHub** (branche `main`).
+Déploiement de la solution sur **Render** (backend Docker), **Neon** (PostgreSQL serverless) et **Netlify** (frontend statique), avec CI/CD automatique via **GitHub** (branche `main`).
 
 ---
 
 ## Prérequis
 
 - Compte [GitHub](https://github.com) avec le repo `veille-terminaux` poussé sur la branche `main`
-- Compte [Render](https://render.com) (plan gratuit suffisant)
-- Compte [Netlify](https://netlify.com) (plan gratuit suffisant)
+- Compte [Neon](https://neon.tech) (plan free : 3 Go DB, pas de limite d'egress séparée)
+- Compte [Render](https://render.com) (plan free : 750h/mois, cold start ~30s après 15 min d'inactivité)
+- Compte [Netlify](https://netlify.com) (plan free : 100 Go bandwidth + 300 build min/mois)
 
 ---
 
-## Phase 1 — Base de données PostgreSQL sur Render
+## Phase 1 — Base de données PostgreSQL sur Neon
 
-Le stockage SQLite est éphémère sur Render : toutes les données sont perdues à chaque redéploiement. On utilise donc un PostgreSQL managé.
+Le stockage SQLite est éphémère sur Render : toutes les données sont perdues à chaque redéploiement. On utilise donc un PostgreSQL managé. Neon est privilégié au plan free de Supabase car (1) il ne pause pas le projet après 7 jours d'inactivité (juste un autosuspend qui résume en <1s), (2) il n'a pas de limite d'egress mensuelle séparée susceptible de saturer rapidement, et (3) il offre 3 Go de stockage.
 
-1. Render Dashboard → **New** → **PostgreSQL**
+1. Neon Console → **New Project**
 2. Renseigner :
-   - **Name** : `veille-terminaux-db`
-   - **Region** : Frankfurt (EU) — à aligner avec le service backend
-   - **Plan** : Free
-3. Cliquer sur **Create Database**
-4. Une fois créée, aller dans l'onglet **Info** et copier l'**Internal Database URL**
+   - **Name** : `veille-terminaux`
+   - **Postgres version** : 17 (par défaut)
+   - **Region** : **Europe (Frankfurt)** — à aligner avec le service backend Render
+3. Cliquer sur **Create project**
+4. Sur l'écran "Connection Details", copier la **Direct connection** (pas pooled — voir note ci-dessous). Format :
+   ```
+   postgresql://neondb_owner:xxx@ep-xxx.eu-central-1.aws.neon.tech/neondb?sslmode=require
+   ```
 
-> ⚠️ L'Internal URL n'est accessible que depuis les services Render du même compte. Pour des connexions externes (ex : depuis votre machine locale), utiliser l'**External Database URL**.
+> 💡 Neon expose 2 endpoints : direct (`ep-xxx.neon.tech`) et pooled (`ep-xxx-pooler.neon.tech`). Pour FastAPI/SQLAlchemy single-worker, l'endpoint **direct** est préférable — il évite les surprises liées au mode transaction de PgBouncer (server-side cursors, `LISTEN/NOTIFY`, advisory locks ne fonctionnent pas via le pooler).
 
 ---
 
@@ -44,7 +48,7 @@ Le backend est déployé via Docker. Le fichier `render.yaml` à la racine du re
 
    | Clé | Valeur |
    |-----|--------|
-   | `DATABASE_URL` | Internal Database URL copiée en Phase 1 |
+   | `DATABASE_URL` | Connection string Neon copiée en Phase 1 (endpoint direct, avec `?sslmode=require`) |
    | `ALLOWED_ORIGINS` | *(à compléter après Phase 3, ex : `https://veille-terminaux.netlify.app`)* |
 
 5. Cliquer sur **Create Web Service**
@@ -109,7 +113,7 @@ Il n'y a aucune configuration supplémentaire à faire.
 
 | Service | Variable | Description |
 |---------|----------|-------------|
-| Render (backend) | `DATABASE_URL` | Internal Database URL PostgreSQL Render |
+| Render (backend) | `DATABASE_URL` | Connection string PostgreSQL Neon (endpoint direct, `?sslmode=require`) |
 | Render (backend) | `ALLOWED_ORIGINS` | URL du frontend Netlify (sans slash final) |
 | Netlify (frontend) | `VITE_API_URL` | URL publique du backend Render |
 
@@ -120,6 +124,8 @@ Il n'y a aucune configuration supplémentaire à faire.
 | Sujet | Détail |
 |-------|--------|
 | **Base de données** | Ne jamais utiliser SQLite en production sur Render — le stockage est réinitialisé à chaque déploiement |
+| **Neon autosuspend** | La DB Neon se met en veille après ~5 min d'inactivité, mais résume en <1s à la première requête (transparent côté backend) |
+| **Pooler vs direct** | Toujours utiliser l'endpoint direct Neon dans `DATABASE_URL` — le pooler casse certaines features SQLAlchemy |
 | **Cold start** | Le plan gratuit Render met le service en veille après 15 min. Prévoir un délai de ~30s sur la première requête |
 | **Build Docker** | L'image Microsoft Playwright (~2 Go) rend le premier build lent (~10 min). Les builds suivants utilisent le cache |
 | **CORS** | `ALLOWED_ORIGINS` doit correspondre **exactement** à l'URL Netlify — sans slash final, avec le protocole `https://` |
