@@ -1,157 +1,26 @@
 import { useMemo, useState } from "react";
 import { Phone } from "../api";
 import { OPERATOR_BADGE } from "../operatorColors";
+import { groupPhones, get24mPrice } from "../utils/phoneGrouping";
 
 interface Props {
   phones: Phone[];
-}
-
-interface GroupInfo {
-  key: string;
-  label: string;
-  vendors: { operator: string; price: number; phone: Phone }[];
-}
-
-const COLOR_WORDS = new Set([
-  // FR de base + variantes flexionnées (m/f, sg/pl)
-  "noir", "noire", "noirs", "noires",
-  "blanc", "blanche", "blancs", "blanches",
-  "bleu", "bleue", "bleus", "bleues",
-  "rouge", "rouges",
-  "vert", "verte", "verts", "vertes",
-  "jaune", "jaunes",
-  "rose", "roses",
-  "violet", "violette", "violets", "violettes",
-  "gris", "grise", "grises",
-  // FR marketing
-  "argent", "argenté", "argentée", "argentés", "argentées",
-  "or", "doré", "dorée", "dorés", "dorées",
-  "lavande", "sable", "marine", "lilas", "neige", "porcelaine", "titane",
-  "graphite", "platine", "obsidienne", "cuivre", "bronze", "carmin",
-  "corail", "perle", "ivoire", "sapin", "ocean", "océan", "menthe",
-  "crème", "creme", "pêche", "peche", "minuit", "stellaire", "aurore",
-  "cosmique", "sidéral", "sideral", "profond", "intense", "clair",
-  "foncé", "fonce", "mat", "mate", "métallique", "metallique",
-  "anthracite", "charbon", "carbone", "mocha", "moka", "ultramarine",
-  "ultramarin", "sahara", "canyon",
-  // EN de base
-  "black", "white", "blue", "red", "green", "yellow", "pink", "purple",
-  "gray", "grey", "silver", "gold",
-  // EN marketing Apple / Samsung / Pixel / Xiaomi / OnePlus / Honor
-  "lavender", "midnight", "starlight", "mist", "cosmos", "sage",
-  "citrine", "natural", "desert", "titanium", "alpine", "sierra",
-  "phantom", "mystic", "onyx", "obsidian", "porcelain", "hazel", "bay",
-  "wintergreen", "charcoal", "snow", "lemongrass", "coral", "glacier",
-  "frost", "forest", "aurora", "astro", "pearl", "ivory", "titan",
-  "chrome", "sandstone", "volcanic", "glacial", "chromatic", "aqua",
-  "meteor", "emerald", "sunrise", "navy", "teal", "peach", "copper",
-  "beige", "indigo", "cream", "mint", "sky", "burgundy", "lime",
-  "aura", "platinum", "carbon", "crystal",
-  // Variantes techniques non-différenciantes commercialement
-  "esim",
-]);
-
-const STORAGE_RE = /(\d+)\s*(g[ob]|to)\b/gi;
-const KNOWN_BARE_STORAGES = [1024, 512, 256, 128, 64];
-const BARE_STORAGE_RE = new RegExp(
-  `\\b(${KNOWN_BARE_STORAGES.join("|")})\\b`,
-);
-
-function extractStorageFromText(text: string): { storage: string | null; cleaned: string } {
-  let storage: string | null = null;
-  const explicit = Array.from(text.matchAll(STORAGE_RE));
-  if (explicit.length > 0) {
-    const m = explicit[0];
-    storage = `${m[1]}${m[2].toLowerCase() === "to" ? "to" : "go"}`;
-  }
-  let cleaned = text.replace(STORAGE_RE, " ");
-
-  // Fallback: bare number from the known-storage list (e.g. "iPhone 16e 256")
-  if (!storage) {
-    const bare = cleaned.match(BARE_STORAGE_RE);
-    if (bare) {
-      storage = `${bare[1]}go`;
-      cleaned = cleaned.replace(BARE_STORAGE_RE, " ");
-    }
-  }
-
-  cleaned = cleaned.replace(/\s+/g, " ").trim();
-  return { storage, cleaned };
-}
-
-function normalizeStorage(s: string | null | undefined): string {
-  if (!s) return "";
-  const { storage } = extractStorageFromText(s);
-  return storage ?? s.toLowerCase().replace(/\s+/g, "");
-}
-
-function stripColorWords(text: string): string {
-  return text
-    .split(/[\s,;./\-()]+/)
-    .filter((w) => w && !COLOR_WORDS.has(w.toLowerCase()))
-    .join(" ")
-    .trim();
-}
-
-function resolveStorageAndModel(p: Phone): { storage: string; model: string } {
-  const fromModel = extractStorageFromText(p.model);
-  const storage = normalizeStorage(p.storage) || fromModel.storage || "";
-  const model = stripColorWords(fromModel.cleaned);
-  return { storage, model };
-}
-
-function normalizeKey(p: Phone): string {
-  const { storage, model } = resolveStorageAndModel(p);
-  return `${p.brand.toLowerCase().trim()}|${model.toLowerCase()}|${storage}`;
-}
-
-function shortLabel(p: Phone): string {
-  const { storage, model } = resolveStorageAndModel(p);
-  const goMatch = storage.match(/^(\d+)go$/);
-  const toMatch = storage.match(/^(\d+)to$/);
-  const storageLabel = goMatch
-    ? `${goMatch[1]} Go`
-    : toMatch
-    ? `${toMatch[1]} To`
-    : storage;
-  return [model, storageLabel].filter(Boolean).join(" ");
 }
 
 export function PriceCompare({ phones }: Props) {
   const [hoveredKey, setHoveredKey] = useState<string | null>(null);
 
   const { operatorKeys, groups, maxPrice } = useMemo(() => {
-    // Group phones by brand+model+storage, ignoring color
-    const map = new Map<string, GroupInfo>();
-
-    for (const p of phones) {
-      const price = p.latest_snapshot?.price_nu;
-      if (price == null) continue;
-
-      const key = normalizeKey(p);
-      if (!map.has(key)) {
-        map.set(key, { key, label: shortLabel(p), vendors: [] });
-      }
-      const group = map.get(key)!;
-
-      // Keep the cheapest price per vendor within this group
-      const existing = group.vendors.find((v) => v.operator === p.operator);
-      if (existing) {
-        if (price < existing.price) {
-          existing.price = price;
-          existing.phone = p;
-        }
-      } else {
-        group.vendors.push({ operator: p.operator, price, phone: p });
-      }
-    }
+    const groups = groupPhones(phones).filter((g) =>
+      g.vendors.some((v) => v.priceNu != null),
+    );
 
     const opSet = new Set<string>();
     let maxPrice = 0;
-    for (const g of map.values()) {
+    for (const g of groups) {
       for (const v of g.vendors) {
         opSet.add(v.operator);
-        if (v.price > maxPrice) maxPrice = v.price;
+        if (v.priceNu != null && v.priceNu > maxPrice) maxPrice = v.priceNu;
       }
     }
     const operatorKeys = Array.from(opSet).sort((a, b) => {
@@ -161,10 +30,6 @@ export function PriceCompare({ phones }: Props) {
       const ob = order(b);
       return oa !== ob ? oa - ob : a.localeCompare(b);
     });
-
-    const groups = Array.from(map.values()).sort((a, b) =>
-      a.label.localeCompare(b.label)
-    );
 
     return { operatorKeys, groups, maxPrice };
   }, [phones]);
@@ -192,64 +57,67 @@ export function PriceCompare({ phones }: Props) {
           ))}
         </div>
         <div className="pc-list">
-          {groups.map((g) => (
-            <div className="pc-group" key={g.key}>
-              <div
-                className="pc-label"
-                onMouseEnter={() => setHoveredKey(g.key)}
-                onMouseLeave={() => setHoveredKey(null)}
-              >
-                {g.label}
-                <span className="pc-count">×{g.vendors.length}</span>
-                {hoveredKey === g.key && (
-                  <div className="pc-popover">
-                    <div className="pc-popover-title">
-                      Références regroupées ({g.vendors.length})
+          {groups.map((g) => {
+            const nuVendors = g.vendors.filter((v) => v.priceNu != null);
+            return (
+              <div className="pc-group" key={g.key}>
+                <div
+                  className="pc-label"
+                  onMouseEnter={() => setHoveredKey(g.key)}
+                  onMouseLeave={() => setHoveredKey(null)}
+                >
+                  {g.label}
+                  <span className="pc-count">×{nuVendors.length}</span>
+                  {hoveredKey === g.key && (
+                    <div className="pc-popover">
+                      <div className="pc-popover-title">
+                        Références regroupées ({nuVendors.length})
+                      </div>
+                      <ul>
+                        {nuVendors.map((v) => (
+                          <li key={v.operator}>
+                            <span
+                              className="vendor-badge"
+                              style={{
+                                background:
+                                  OPERATOR_BADGE[v.operator]?.color ?? "#666",
+                              }}
+                            >
+                              {OPERATOR_BADGE[v.operator]?.label ?? v.operator}
+                            </span>
+                            <span className="pc-popover-name">
+                              {v.phone.name}
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
                     </div>
-                    <ul>
-                      {g.vendors.map((v) => (
-                        <li key={v.operator}>
-                          <span
-                            className="vendor-badge"
-                            style={{
-                              background:
-                                OPERATOR_BADGE[v.operator]?.color ?? "#666",
-                            }}
-                          >
-                            {OPERATOR_BADGE[v.operator]?.label ?? v.operator}
-                          </span>
-                          <span className="pc-popover-name">
-                            {v.phone.name}
-                          </span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
+                  )}
+                </div>
+                <div className="pc-bars">
+                  {nuVendors
+                    .slice()
+                    .sort((a, b) => (a.priceNu ?? 0) - (b.priceNu ?? 0))
+                    .map((v) => (
+                      <div className="pc-bar-row" key={v.operator}>
+                        <div
+                          className="pc-bar"
+                          style={{
+                            width: `${((v.priceNu ?? 0) / maxPrice) * 100}%`,
+                            background:
+                              OPERATOR_BADGE[v.operator]?.color ?? "#888",
+                          }}
+                          title={`${OPERATOR_BADGE[v.operator]?.label ?? v.operator} : ${(v.priceNu ?? 0).toFixed(2).replace(".", ",")} €`}
+                        />
+                        <span className="pc-bar-price">
+                          {(v.priceNu ?? 0).toFixed(2).replace(".", ",")} €
+                        </span>
+                      </div>
+                    ))}
+                </div>
               </div>
-              <div className="pc-bars">
-                {g.vendors
-                  .slice()
-                  .sort((a, b) => a.price - b.price)
-                  .map((v) => (
-                    <div className="pc-bar-row" key={v.operator}>
-                      <div
-                        className="pc-bar"
-                        style={{
-                          width: `${(v.price / maxPrice) * 100}%`,
-                          background:
-                            OPERATOR_BADGE[v.operator]?.color ?? "#888",
-                        }}
-                        title={`${OPERATOR_BADGE[v.operator]?.label ?? v.operator} : ${v.price.toFixed(2).replace(".", ",")} €`}
-                      />
-                      <span className="pc-bar-price">
-                        {v.price.toFixed(2).replace(".", ",")} €
-                      </span>
-                    </div>
-                  ))}
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
 
@@ -268,9 +136,11 @@ export function PriceCompare({ phones }: Props) {
         </thead>
         <tbody>
           {groups.map((g) => {
-            const best = g.vendors.reduce(
-              (a, b) => (a.price <= b.price ? a : b),
-              g.vendors[0]
+            const nuVendors = g.vendors.filter((v) => v.priceNu != null);
+            if (nuVendors.length === 0) return null;
+            const best = nuVendors.reduce(
+              (a, b) => ((a.priceNu ?? Infinity) <= (b.priceNu ?? Infinity) ? a : b),
+              nuVendors[0],
             );
             return (
               <tr key={g.label}>
@@ -279,20 +149,8 @@ export function PriceCompare({ phones }: Props) {
                 </td>
                 {operatorKeys.map((op) => {
                   const v = g.vendors.find((x) => x.operator === op);
-                  const isBest = v && v.price === best.price;
-                  const planPrices = v?.phone.latest_snapshot?.plan_prices ?? [];
-                  let selectedPrice: number | null = null;
-                  if (v?.operator === "orange_re") {
-                    // Orange: forfait grand public 250 Go GP
-                    const gp = planPrices.find(
-                      (pp) => pp.plan_name === "250 Go GP" && pp.price_device != null,
-                    );
-                    selectedPrice = gp?.price_device ?? null;
-                  } else {
-                    selectedPrice = planPrices
-                      .filter((pp) => pp.price_device != null && pp.engagement_months === 24)
-                      .reduce((min, pp) => (min == null || pp.price_device! < min ? pp.price_device! : min), null as number | null);
-                  }
+                  const isBest = v && v.priceNu != null && v.priceNu === best.priceNu;
+                  const selectedPrice = v ? get24mPrice(v.phone) : null;
                   const tiers: [string, number][] = selectedPrice != null ? [["24", selectedPrice]] : [];
                   return (
                     <td
@@ -302,14 +160,14 @@ export function PriceCompare({ phones }: Props) {
                     >
                       {v ? (
                         <div className="compare-prices">
-                          {v.phone.latest_snapshot?.price_nu != null && (
+                          {v.priceNu != null && (
                             <div className="compare-price-line">
                               {v.phone.page_url ? (
                                 <a href={v.phone.page_url} target="_blank" rel="noopener noreferrer">
-                                  {v.price.toFixed(2).replace(".", ",")} €
+                                  {v.priceNu.toFixed(2).replace(".", ",")} €
                                 </a>
                               ) : (
-                                <span>{v.price.toFixed(2).replace(".", ",")} €</span>
+                                <span>{v.priceNu.toFixed(2).replace(".", ",")} €</span>
                               )}
                               <span className="engagement-label">nu</span>
                             </div>
@@ -339,7 +197,7 @@ export function PriceCompare({ phones }: Props) {
                     >
                       {OPERATOR_BADGE[best.operator]?.label ?? best.operator}
                     </span>
-                    {best.price.toFixed(2).replace(".", ",")} €
+                    {best.priceNu!.toFixed(2).replace(".", ",")} €
                   </div>
                 </td>
               </tr>

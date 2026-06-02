@@ -829,3 +829,260 @@ body {
   font-weight: 400;
   white-space: nowrap;
 }
+
+/* ── Top-level view tabs (Catalogue / Orange doit faire mieux / Orange champion) ── */
+.view-tabs {
+  display: flex;
+  gap: 0.4rem;
+  margin-top: 0.6rem;
+}
+.view-tabs button {
+  background: transparent;
+  border: 1px solid rgba(255,255,255,0.25);
+  color: rgba(255,255,255,0.75);
+  padding: 0.45rem 0.95rem;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.85rem;
+  font-weight: 600;
+  transition: all 0.15s;
+}
+.view-tabs button:hover {
+  border-color: rgba(255,255,255,0.55);
+  color: white;
+}
+.view-tabs button.active {
+  background: rgba(255,255,255,0.95);
+  color: var(--accent);
+  border-color: rgba(255,255,255,0.95);
+}
+.view-tabs button.view-tab-lose.active {
+  background: #ffe1e1;
+  color: #b91c1c;
+  border-color: #ffe1e1;
+}
+.view-tabs button.view-tab-win.active {
+  background: #d6f5e1;
+  color: #047857;
+  border-color: #d6f5e1;
+}
+
+/* ── Orange Arbitrage view ── */
+.arbitrage {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.arbitrage-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1.5rem;
+  padding: 1rem 1.25rem;
+  background: white;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+.arbitrage-title {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--text);
+}
+.arbitrage-sub {
+  margin: 0.25rem 0 0;
+  color: var(--text-light);
+  font-size: 0.85rem;
+}
+.arbitrage-stats {
+  display: flex;
+  gap: 1.5rem;
+}
+.arbitrage-stat {
+  text-align: right;
+}
+.arbitrage-stat-value {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--text);
+}
+.arbitrage-stat-value.loss { color: #b91c1c; }
+.arbitrage-stat-value.win { color: #047857; }
+.arbitrage-stat-label {
+  font-size: 0.72rem;
+  color: var(--text-light);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.arbitrage-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.5rem;
+  align-items: center;
+  padding: 0.75rem 1rem;
+  background: white;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+.arbitrage-filter-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+.arbitrage-filter-label {
+  font-size: 0.7rem;
+  color: var(--text-light);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-weight: 600;
+}
+.arbitrage-toggle {
+  display: inline-flex;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 2px;
+}
+.arbitrage-toggle button {
+  background: transparent;
+  border: none;
+  padding: 0.35rem 0.75rem;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.82rem;
+  color: var(--text-light);
+  transition: all 0.15s;
+}
+.arbitrage-toggle button:hover { color: var(--text); }
+.arbitrage-toggle button.active {
+  background: white;
+  color: var(--text);
+  box-shadow: 0 1px 2px rgba(0,0,0,0.06);
+  font-weight: 600;
+}
+
+.arbitrage-table-wrap {
+  background: white;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+.arbitrage-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.88rem;
+}
+.arbitrage-table thead {
+  background: #fafafa;
+}
+.arbitrage-table th {
+  text-align: left;
+  padding: 0.7rem 1rem;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-light);
+  border-bottom: 1px solid var(--border);
+  font-weight: 600;
+}
+.arbitrage-table td {
+  padding: 0.85rem 1rem;
+  border-bottom: 1px solid var(--border);
+  vertical-align: top;
+}
+.arbitrage-table tbody tr:last-child td { border-bottom: none; }
+.arbitrage-table tbody tr:hover { background: #fafafa; }
+
+.arbitrage-model-text {
+  font-weight: 600;
+  color: var(--text);
+}
+.arbitrage-brand {
+  font-size: 0.72rem;
+  color: var(--text-light);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-top: 0.15rem;
+}
+
+.arbitrage-orange {
+  font-weight: 700;
+  color: var(--accent);
+  white-space: nowrap;
+}
+.arbitrage-price-link {
+  color: inherit;
+  text-decoration: none;
+  border-bottom: 1px dotted currentColor;
+}
+.arbitrage-price-link:hover { text-decoration: none; opacity: 0.85; }
+
+.arbitrage-competitor-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+.arbitrage-competitor-list li {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  font-size: 0.85rem;
+}
+.arbitrage-competitor-list li a,
+.arbitrage-competitor-list li span:not(.vendor-badge):not(.arbitrage-delta) {
+  color: var(--text);
+  text-decoration: none;
+  white-space: nowrap;
+}
+.arbitrage-competitor-list li a:hover { text-decoration: underline; }
+.arbitrage-competitor-list li.best {
+  font-weight: 700;
+}
+
+.arbitrage-delta {
+  font-size: 0.78rem;
+  font-weight: 600;
+  padding: 0.1rem 0.4rem;
+  border-radius: 3px;
+  white-space: nowrap;
+}
+.arbitrage-delta.loss {
+  color: #b91c1c;
+  background: #fee2e2;
+}
+.arbitrage-delta.win {
+  color: #047857;
+  background: #d1fae5;
+}
+
+.arbitrage-gap {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.15rem;
+  padding: 0.4rem 0.65rem;
+  border-radius: 6px;
+  white-space: nowrap;
+}
+.arbitrage-gap.loss {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+.arbitrage-gap.win {
+  background: #d1fae5;
+  color: #047857;
+}
+.arbitrage-gap-amount {
+  font-size: 1rem;
+  font-weight: 700;
+}
+.arbitrage-gap-pct {
+  font-size: 0.75rem;
+  opacity: 0.85;
+}

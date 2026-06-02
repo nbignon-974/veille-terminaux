@@ -2,8 +2,10 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { api, Operator, Phone } from "./api";
 import { PhoneGrid } from "./components/PhoneGrid";
 import { ScrapeButton } from "./components/ScrapeButton";
+import { OrangeArbitrage } from "./components/OrangeArbitrage";
 
 type PriceRange = "" | "0-200" | "200-500" | "500-1000" | "1000+";
+type View = "catalogue" | "orange-lose" | "orange-win";
 
 const PRICE_RANGES: { key: PriceRange; label: string }[] = [
   { key: "", label: "Tous prix" },
@@ -25,7 +27,9 @@ function inPriceRange(phone: Phone, range: PriceRange): boolean {
 }
 
 export default function App() {
+  const [view, setView] = useState<View>("catalogue");
   const [phones, setPhones] = useState<Phone[]>([]);
+  const [arbitragePhones, setArbitragePhones] = useState<Phone[]>([]);
   const [brands, setBrands] = useState<string[]>([]);
   const [operators, setOperators] = useState<Operator[]>([]);
   const [selectedOperator, setSelectedOperator] = useState<string>("");
@@ -39,7 +43,7 @@ export default function App() {
     api.getOperators().then(setOperators).catch(() => {});
   }, []);
 
-  const loadData = useCallback(async () => {
+  const loadCatalogue = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
@@ -59,14 +63,38 @@ export default function App() {
     }
   }, [selectedOperator, productType, showRefurbished]);
 
+  const loadArbitrage = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const phonesData = await api.getPhones(undefined, undefined, undefined, "phone", undefined);
+      setArbitragePhones(phonesData);
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
-    loadData();
-  }, [loadData]);
+    if (view === "catalogue") {
+      loadCatalogue();
+    } else {
+      loadArbitrage();
+    }
+  }, [view, loadCatalogue, loadArbitrage]);
+
+  const handleScrapeComplete = useCallback(() => {
+    if (view === "catalogue") loadCatalogue();
+    else loadArbitrage();
+  }, [view, loadCatalogue, loadArbitrage]);
 
   const filteredPhones = useMemo(
     () => phones.filter((p) => inPriceRange(p, priceRange)),
     [phones, priceRange]
   );
+
+  const isCatalogue = view === "catalogue";
 
   return (
     <div className="app">
@@ -74,79 +102,103 @@ export default function App() {
         <div className="header-content">
           <div className="header-top">
             <h1>Veille Tarifaire Terminaux</h1>
-            <ScrapeButton onScrapeComplete={loadData} operators={operators} />
+            <ScrapeButton onScrapeComplete={handleScrapeComplete} operators={operators} />
           </div>
-          <div className="header-separator" />
-          <div className="header-title">
-            <div className="operator-tabs">
-              <button
-                className={!selectedOperator ? "active" : ""}
-                onClick={() => setSelectedOperator("")}
-              >
-                Tous vendeurs
-              </button>
-              {operators.map((op) => (
-                <button
-                  key={op.id}
-                  className={selectedOperator === op.id ? "active" : ""}
-                  onClick={() => setSelectedOperator(op.id)}
-                >
-                  {op.label}
-                </button>
-              ))}
-            </div>
-            <div className="product-type-tabs">
-              <button
-                className={productType === "phone" ? "active" : ""}
-                onClick={() => setProductType("phone")}
-              >
-                Terminaux
-              </button>
-              <button
-                className={productType === "accessory" ? "active" : ""}
-                onClick={() => setProductType("accessory")}
-              >
-                Accessoires
-              </button>
-              <button
-                className={!productType ? "active" : ""}
-                onClick={() => setProductType("")}
-              >
-                Tout
-              </button>
-            </div>
-            <div className="product-type-tabs">
-              <button
-                className={showRefurbished === "" ? "active" : ""}
-                onClick={() => setShowRefurbished("")}
-              >
-                Tous états
-              </button>
-              <button
-                className={showRefurbished === "no" ? "active" : ""}
-                onClick={() => setShowRefurbished("no")}
-              >
-                Neuf
-              </button>
-              <button
-                className={showRefurbished === "yes" ? "active" : ""}
-                onClick={() => setShowRefurbished("yes")}
-              >
-                Reconditionné
-              </button>
-            </div>
-            <div className="product-type-tabs">
-              {PRICE_RANGES.map(({ key, label }) => (
-                <button
-                  key={key}
-                  className={priceRange === key ? "active" : ""}
-                  onClick={() => setPriceRange(key)}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
+          <div className="view-tabs">
+            <button
+              className={view === "catalogue" ? "active" : ""}
+              onClick={() => setView("catalogue")}
+            >
+              Catalogue
+            </button>
+            <button
+              className={`view-tab-lose ${view === "orange-lose" ? "active" : ""}`}
+              onClick={() => setView("orange-lose")}
+            >
+              Orange doit faire mieux
+            </button>
+            <button
+              className={`view-tab-win ${view === "orange-win" ? "active" : ""}`}
+              onClick={() => setView("orange-win")}
+            >
+              Orange champion
+            </button>
           </div>
+          {isCatalogue && (
+            <>
+              <div className="header-separator" />
+              <div className="header-title">
+                <div className="operator-tabs">
+                  <button
+                    className={!selectedOperator ? "active" : ""}
+                    onClick={() => setSelectedOperator("")}
+                  >
+                    Tous vendeurs
+                  </button>
+                  {operators.map((op) => (
+                    <button
+                      key={op.id}
+                      className={selectedOperator === op.id ? "active" : ""}
+                      onClick={() => setSelectedOperator(op.id)}
+                    >
+                      {op.label}
+                    </button>
+                  ))}
+                </div>
+                <div className="product-type-tabs">
+                  <button
+                    className={productType === "phone" ? "active" : ""}
+                    onClick={() => setProductType("phone")}
+                  >
+                    Terminaux
+                  </button>
+                  <button
+                    className={productType === "accessory" ? "active" : ""}
+                    onClick={() => setProductType("accessory")}
+                  >
+                    Accessoires
+                  </button>
+                  <button
+                    className={!productType ? "active" : ""}
+                    onClick={() => setProductType("")}
+                  >
+                    Tout
+                  </button>
+                </div>
+                <div className="product-type-tabs">
+                  <button
+                    className={showRefurbished === "" ? "active" : ""}
+                    onClick={() => setShowRefurbished("")}
+                  >
+                    Tous états
+                  </button>
+                  <button
+                    className={showRefurbished === "no" ? "active" : ""}
+                    onClick={() => setShowRefurbished("no")}
+                  >
+                    Neuf
+                  </button>
+                  <button
+                    className={showRefurbished === "yes" ? "active" : ""}
+                    onClick={() => setShowRefurbished("yes")}
+                  >
+                    Reconditionné
+                  </button>
+                </div>
+                <div className="product-type-tabs">
+                  {PRICE_RANGES.map(({ key, label }) => (
+                    <button
+                      key={key}
+                      className={priceRange === key ? "active" : ""}
+                      onClick={() => setPriceRange(key)}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </>
+          )}
         </div>
       </header>
 
@@ -161,23 +213,37 @@ export default function App() {
         {error && !loading && (
           <div className="error-state">
             <p>Erreur lors du chargement : {error}</p>
-            <button onClick={loadData} className="retry-btn">Réessayer</button>
+            <button
+              onClick={isCatalogue ? loadCatalogue : loadArbitrage}
+              className="retry-btn"
+            >
+              Réessayer
+            </button>
           </div>
         )}
 
-        {!error && (
+        {!error && !loading && isCatalogue && (
           <PhoneGrid phones={filteredPhones} brands={brands} />
+        )}
+
+        {!error && !loading && !isCatalogue && (
+          <OrangeArbitrage
+            phones={arbitragePhones}
+            mode={view === "orange-lose" ? "lose" : "win"}
+          />
         )}
       </main>
 
-      <footer className="app-footer">
-        <p>
-          {filteredPhones.length > 1 ? `${filteredPhones.length} terminaux` : `${filteredPhones.length} terminal`} en base
-          {selectedOperator
-            ? ` · ${operators.find((o) => o.id === selectedOperator)?.label ?? selectedOperator}`
-            : " · Tous vendeurs"}
-        </p>
-      </footer>
+      {isCatalogue && (
+        <footer className="app-footer">
+          <p>
+            {filteredPhones.length > 1 ? `${filteredPhones.length} terminaux` : `${filteredPhones.length} terminal`} en base
+            {selectedOperator
+              ? ` · ${operators.find((o) => o.id === selectedOperator)?.label ?? selectedOperator}`
+              : " · Tous vendeurs"}
+          </p>
+        </footer>
+      )}
     </div>
   );
 }
