@@ -88,11 +88,16 @@ def _parse_ravate_name(
     # Remove leading "Smartphone " or "Téléphone "
     main_clean = re.sub(r"^(?:Smartphone|Téléphone)\s+", "", main, flags=re.I)
 
-    # Extract storage: "128Go", "256Go", "4/128Go" etc.
+    # Extract storage: take the LARGEST capacity, never the RAM, e.g.
+    # "6Go/128Go" → 128Go, "4/128Go" → 128Go, "1To" → 1To.
     storage = None
-    storage_m = re.search(r"(?:\d+/)?([\d]+)\s*Go\b", main_clean, re.I)
-    if storage_m:
-        storage = storage_m.group(1) + "GO"
+    caps = []
+    for n, unit in re.findall(r"(\d+)\s*(Go|GB|To|TB)\b", main_clean, re.I):
+        val = int(n) * (1024 if unit.lower() in ("to", "tb") else 1)
+        caps.append((val, n, unit.lower()))
+    if caps:
+        _, n, unit = max(caps, key=lambda c: c[0])
+        storage = n + ("TO" if unit in ("to", "tb") else "GO")
 
     # Known colors
     colors = {

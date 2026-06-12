@@ -52,12 +52,31 @@ const BARE_STORAGE_RE = new RegExp(
   `\\b(${KNOWN_BARE_STORAGES.join("|")})\\b`,
 );
 
+// Compare two normalized storages ("6go", "128go", "1to") by absolute capacity.
+export function storageValue(s: string | null | undefined): number {
+  if (!s) return -1;
+  const m = s.toLowerCase().match(/^(\d+)\s*(go|gb|to|tb)$/);
+  if (!m) return -1;
+  const unit = m[2];
+  return parseInt(m[1], 10) * (unit === "to" || unit === "tb" ? 1024 : 1);
+}
+
 export function extractStorageFromText(text: string): { storage: string | null; cleaned: string } {
   let storage: string | null = null;
   const explicit = Array.from(text.matchAll(STORAGE_RE));
   if (explicit.length > 0) {
-    const m = explicit[0];
-    storage = `${m[1]}${m[2].toLowerCase() === "to" ? "to" : "go"}`;
+    // Pick the LARGEST capacity, never the RAM: "6Go/128Go" → 128Go, "8/256" → 256.
+    let best = explicit[0];
+    let bestVal = -1;
+    for (const m of explicit) {
+      const norm = `${m[1]}${m[2].toLowerCase() === "to" ? "to" : "go"}`;
+      const val = storageValue(norm);
+      if (val > bestVal) {
+        bestVal = val;
+        best = m;
+      }
+    }
+    storage = `${best[1]}${best[2].toLowerCase() === "to" ? "to" : "go"}`;
   }
   let cleaned = text.replace(STORAGE_RE, " ");
 
@@ -98,7 +117,8 @@ const NOISE_RE = new RegExp(
   [
     "\\(.*?\\)", // parentheticals e.g. (6.9")
     "\\d+[.,]\\d+\\s*cm", // screen size 17,5 cm
-    "\\d+[.,]\\d+\\s*\"", // inches 6.9"
+    "\\d+[.,]\\d+\\s*[\"”″'']", // inches 6.9" / 6,77” (straight or curly quotes)
+    "\\bcouleurs?\\b", // placeholder "couleur" some vendors leave in the name
     "\\bios\\s*\\d+\\b",
     "\\bandroid\\s*\\d+\\b",
     "\\busb\\s*type-?c\\b",
@@ -187,7 +207,13 @@ export function cleanModel(text: string): string {
 
 export function resolveStorageAndModel(p: Phone): { storage: string; model: string } {
   const fromModel = extractStorageFromText(p.model);
-  const storage = normalizeStorage(p.storage) || fromModel.storage || "";
+  const fromField = normalizeStorage(p.storage);
+  // Prefer the larger capacity: the DB field is sometimes the RAM (e.g. ravate
+  // parsed "6Go/128Go" as 6Go), in which case the model text has the real size.
+  const storage =
+    storageValue(fromModel.storage) > storageValue(fromField)
+      ? fromModel.storage ?? ""
+      : fromField || fromModel.storage || "";
   const model = cleanModel(fromModel.cleaned);
   return { storage, model };
 }
@@ -210,6 +236,12 @@ export function normalizeKey(p: Phone): string {
       keyModel = keyModel.replace(/\b5g\b/g, "");
     }
     keyModel = keyModel.replace(/\s+/g, " ").trim();
+  } else if (brand === "xiaomi") {
+    // Redmi Note "Pro+" is 5G-only, so "5G" is redundant there. The plain "Pro"
+    // and base Note have genuine 4G vs 5G variants, so keep it for those.
+    if (/\bpro\s*plus\b/.test(keyModel)) {
+      keyModel = keyModel.replace(/\b5g\b/g, "").replace(/\s+/g, " ").trim();
+    }
   }
 
   return `${brand}|${keyModel}|${storage}|${condition}`;
