@@ -43,14 +43,22 @@ _EXTRACT_JS = """
         if (seen.has(productId)) return;
         seen.add(productId);
 
-        // Product name from .product-title or h3
+        // Product name. Phenix truncates the visible title server-side with a
+        // literal "…" (and exposes no title/alt attribute), which loses the
+        // storage/colour suffix. When that happens, rebuild the full name from the
+        // URL slug, which carries the complete product name.
         let name = '';
         const titleEl = card.querySelector('.product-title a, h3 a, h2 a');
-        if (titleEl) {
-            name = titleEl.textContent.trim();
-        }
-        if (!name) {
-            name = link.getAttribute('title') || '';
+        if (titleEl) name = titleEl.textContent.trim();
+        if (!name) name = link.getAttribute('title') || '';
+        if (!name || /\\.\\.\\.|…/.test(name)) {
+            const seg = (href.split('#')[0].split('?')[0].split('/').pop() || '');
+            const slug = seg.replace(/\\.html$/, '')
+                            .replace(/^\\d+-/, '')      // drop leading product id
+                            .replace(/-\\d{8,}$/, '')   // drop trailing EAN/barcode
+                            .replace(/-/g, ' ')
+                            .trim();
+            if (slug) name = slug;
         }
 
         // Current price from .price element

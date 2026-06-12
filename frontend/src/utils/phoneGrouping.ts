@@ -14,7 +14,7 @@ const COLOR_WORDS = new Set([
   // FR marketing
   "argent", "argenté", "argentée", "argentés", "argentées",
   "or", "doré", "dorée", "dorés", "dorées",
-  "lavande", "sable", "marine", "lilas", "neige", "porcelaine", "titane",
+  "lavande", "sable", "marine", "nuit", "lilas", "neige", "porcelaine", "titane",
   "graphite", "platine", "obsidienne", "cuivre", "bronze", "carmin",
   "corail", "perle", "ivoire", "sapin", "ocean", "océan", "menthe",
   "crème", "creme", "pêche", "peche", "minuit", "stellaire", "aurore",
