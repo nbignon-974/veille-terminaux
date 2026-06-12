@@ -42,8 +42,9 @@ export function ScrapeButton({ onScrapeComplete, operators }: Props) {
           stopPolling();
           setActiveRun(null);
           api.getScrapeRuns().then(setRuns).catch(() => {});
-          if (status.status === "done") onScrapeComplete();
           if (status.status === "error") setError(status.error_message ?? "Erreur inconnue");
+          // Refresh catalogue + health banner whether the run succeeded or failed.
+          onScrapeComplete();
         }
       } catch (e) {
         stopPolling();

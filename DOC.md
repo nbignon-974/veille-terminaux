@@ -173,6 +173,7 @@ La fonction `detect_refurbished(name, url)` identifie les produits reconditionn�
 | GET     | `/phones/{id}/history` | Historique des prix d'un téléphone               |
 | POST    | `/scrape?operator=`    | Lancer un scrape (tâche de fond)                 |
 | GET     | `/scrape/runs`         | 50 dernières exécutions                          |
+| GET     | `/scrape/health`       | Scrapers à analyser (dernier run en erreur, 0 terminal, ou volume en forte baisse vs run précédent) |
 | GET     | `/scrape/{run_id}`     | Statut + progression temps réel d'un scrape      |
 | GET     | `/brands`              | Liste des marques (filtre operator optionnel)     |
 | GET     | `/operators`           | Liste des opérateurs disponibles                 |

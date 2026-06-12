@@ -167,6 +167,18 @@ class ScrapeStatusOut(BaseModel):
     operator: str
 
 
+class ScrapeHealthOut(BaseModel):
+    operator: str
+    label: str
+    state: str  # "ko" | "warning"
+    reason: str
+    last_run_id: Optional[int]
+    last_status: Optional[str]
+    last_count: Optional[int]
+    prev_count: Optional[int]
+    last_at: Optional[datetime]
+
+
 # ─── Background task ─────────────────────────────────────────────────────────
 
 async def _do_scrape(run_id: int, operator: str):
@@ -341,6 +353,81 @@ async def start_scrape(operator: str = "sfr_re", db: Session = Depends(get_db)):
 def list_scrape_runs(db: Session = Depends(get_db)):
     runs = db.query(ScrapeRun).order_by(ScrapeRun.started_at.desc()).limit(50).all()
     return runs
+
+
+# Below this ratio of the previous successful collection, a run is flagged as a
+# suspicious volume drop (likely a partially-broken scraper) even if it ran "done".
+_HEALTH_LOW_RATIO = 0.5
+
+
+@app.get("/scrape/health", response_model=list[ScrapeHealthOut])
+def scrape_health(db: Session = Depends(get_db)):
+    """Per-operator health derived from each operator's most recent finished run.
+    Surfaces scrapers that need investigation: last run errored, returned 0, or
+    collected far fewer products than the previous successful run."""
+    runs = (
+        db.query(ScrapeRun)
+        .filter(ScrapeRun.status.in_(["done", "error"]))
+        .order_by(ScrapeRun.started_at.desc())
+        .limit(300)
+        .all()
+    )
+    by_op: dict[str, list[ScrapeRun]] = {}
+    for r in runs:
+        by_op.setdefault(r.operator, []).append(r)
+
+    issues: list[ScrapeHealthOut] = []
+    for op, label in OPERATORS.items():
+        op_runs = by_op.get(op, [])
+        if not op_runs:
+            continue  # never collected — not an alert
+
+        last = op_runs[0]  # most recent finished run
+        state: Optional[str] = None
+        reason = ""
+        prev_count: Optional[int] = None
+
+        if last.status == "error":
+            state = "ko"
+            msg = ""
+            if last.error_message:
+                msg = last.error_message.strip().splitlines()[0]
+            reason = "Dernier run en erreur" + (f" — {msg[:140]}" if msg else "")
+        elif last.phones_scraped == 0:
+            state = "ko"
+            reason = "Dernier run terminé avec 0 terminal"
+        else:
+            prev = next(
+                (r for r in op_runs[1:] if r.status == "done" and r.phones_scraped > 0),
+                None,
+            )
+            if prev and last.phones_scraped < prev.phones_scraped * _HEALTH_LOW_RATIO:
+                state = "warning"
+                prev_count = prev.phones_scraped
+                drop = round((1 - last.phones_scraped / prev.phones_scraped) * 100)
+                reason = (
+                    f"Volume en forte baisse : {last.phones_scraped} "
+                    f"vs {prev_count} précédemment (-{drop}%)"
+                )
+
+        if state:
+            issues.append(
+                ScrapeHealthOut(
+                    operator=op,
+                    label=label,
+                    state=state,
+                    reason=reason,
+                    last_run_id=last.id,
+                    last_status=last.status,
+                    last_count=last.phones_scraped,
+                    prev_count=prev_count,
+                    last_at=last.finished_at or last.started_at,
+                )
+            )
+
+    # KO first, then warnings, alphabetical within each group.
+    issues.sort(key=lambda i: (i.state != "ko", i.label))
+    return issues
 
 
 @app.delete("/scrape/{run_id}", status_code=200)

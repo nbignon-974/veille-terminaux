@@ -160,6 +160,93 @@ body {
   white-space: nowrap;
 }
 
+/* ── Scraper health banner (persistent alert) ── */
+.health-banner {
+  max-width: 1400px;
+  margin: 1rem auto 0;
+  padding: 0.85rem 1.1rem;
+  background: #fff7ed;
+  border: 1px solid #fdba74;
+  border-left: 5px solid #ea580c;
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+
+.health-banner-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.health-banner-title {
+  font-weight: 700;
+  color: #9a3412;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.health-pill {
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 0.1rem 0.5rem;
+  border-radius: 999px;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.health-pill-ko { background: #7f1d1d; color: #fecaca; }
+.health-pill-warning { background: #92400e; color: #fde68a; }
+
+.health-refresh {
+  background: transparent;
+  border: 1px solid #fdba74;
+  color: #9a3412;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 1rem;
+  line-height: 1;
+  padding: 0.25rem 0.5rem;
+}
+.health-refresh:hover { background: #ffedd5; }
+
+.health-list {
+  list-style: none;
+  margin: 0.6rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.health-item {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  flex-wrap: wrap;
+  font-size: 0.9rem;
+  padding: 0.35rem 0.5rem;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.6);
+}
+
+.health-item-ko { border-left: 3px solid #dc2626; }
+.health-item-warning { border-left: 3px solid #d97706; }
+
+.health-badge {
+  color: #fff;
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 0.12rem 0.5rem;
+  border-radius: 5px;
+  white-space: nowrap;
+}
+
+.health-reason { color: #1f2937; }
+.health-when { color: var(--text-light); font-size: 0.8rem; }
+
 /* ── Main ── */
 .app-main {
   max-width: 1400px;

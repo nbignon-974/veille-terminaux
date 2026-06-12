@@ -55,6 +55,18 @@ export interface Operator {
   label: string;
 }
 
+export interface ScrapeHealth {
+  operator: string;
+  label: string;
+  state: "ko" | "warning";
+  reason: string;
+  last_run_id: number | null;
+  last_status: string | null;
+  last_count: number | null;
+  prev_count: number | null;
+  last_at: string | null;
+}
+
 const BASE = import.meta.env.VITE_API_URL ?? "";
 const API_KEY = import.meta.env.VITE_API_KEY ?? "";
 
@@ -100,6 +112,8 @@ export const api = {
     apiFetch<ScrapeStatus>(`/scrape/${runId}`),
 
   getScrapeRuns: () => apiFetch<ScrapeRun[]>("/scrape/runs"),
+
+  getScrapeHealth: () => apiFetch<ScrapeHealth[]>("/scrape/health"),
 
   importOrangeCsv: async (file: File): Promise<ScrapeRun> => {
     const form = new FormData();

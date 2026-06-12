@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { api, Operator, Phone } from "./api";
+import { api, Operator, Phone, ScrapeHealth } from "./api";
 import { PhoneGrid } from "./components/PhoneGrid";
 import { ScrapeButton } from "./components/ScrapeButton";
+import { ScrapeHealthBanner } from "./components/ScrapeHealthBanner";
 import { OrangeArbitrage } from "./components/OrangeArbitrage";
 
 type PriceRange = "" | "0-200" | "200-500" | "500-1000" | "1000+";
@@ -32,6 +33,7 @@ export default function App() {
   const [arbitragePhones, setArbitragePhones] = useState<Phone[]>([]);
   const [brands, setBrands] = useState<string[]>([]);
   const [operators, setOperators] = useState<Operator[]>([]);
+  const [health, setHealth] = useState<ScrapeHealth[]>([]);
   const [selectedOperator, setSelectedOperator] = useState<string>("");
   const [productType, setProductType] = useState<string>("phone");
   const [showRefurbished, setShowRefurbished] = useState<string>("");
@@ -39,9 +41,14 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  const loadHealth = useCallback(() => {
+    api.getScrapeHealth().then(setHealth).catch(() => {});
+  }, []);
+
   useEffect(() => {
     api.getOperators().then(setOperators).catch(() => {});
-  }, []);
+    loadHealth();
+  }, [loadHealth]);
 
   const loadCatalogue = useCallback(async () => {
     setLoading(true);
@@ -87,7 +94,8 @@ export default function App() {
   const handleScrapeComplete = useCallback(() => {
     if (view === "catalogue") loadCatalogue();
     else loadArbitrage();
-  }, [view, loadCatalogue, loadArbitrage]);
+    loadHealth();
+  }, [view, loadCatalogue, loadArbitrage, loadHealth]);
 
   const filteredPhones = useMemo(
     () => phones.filter((p) => inPriceRange(p, priceRange)),
@@ -201,6 +209,8 @@ export default function App() {
           )}
         </div>
       </header>
+
+      <ScrapeHealthBanner issues={health} onRefresh={loadHealth} />
 
       <main className="app-main">
         {loading && (
