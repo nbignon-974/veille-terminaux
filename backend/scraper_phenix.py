@@ -93,22 +93,6 @@ _EXTRACT_JS = """
 }
 """
 
-# Discover max page number from pagination links.
-_MAX_PAGE_JS = """
-() => {
-    let maxPage = 1;
-    document.querySelectorAll('a[href*="page="]').forEach(link => {
-        const href = link.getAttribute('href') || '';
-        const match = href.match(/[?&]page=(\\d+)/);
-        if (match) {
-            const p = parseInt(match[1]);
-            if (p > maxPage) maxPage = p;
-        }
-    });
-    return maxPage;
-}
-"""
-
 # Common color names for extraction from product names
 _COLORS = {
     "noir", "blanc", "bleu", "rouge", "vert", "rose", "gris", "argent",
@@ -196,28 +180,37 @@ async def run_scrape(on_progress=None) -> list[PhoneData]:
             await browser.close()
             raise
 
-        # Discover total number of pages
-        max_page = await page.evaluate(_MAX_PAGE_JS)
-        page_urls = [f"{BASE_URL}?page={p}" for p in range(1, max_page + 1)]
-
-        total_pages = len(page_urls)
-        logger.info("Found %d page(s) to scrape", total_pages)
-
+        # Crawl pages until one yields no new products instead of trusting a max-page
+        # link read from the first page (which, if the pagination block renders late,
+        # comes back as 1 and silently collects only page 1). PrestaShop clamps
+        # out-of-range ?page=N to the last page, so a duplicate page (0 new) marks the end.
         all_raw: list[dict] = []
         seen_ids: set[str] = set()
 
-        for i, url in enumerate(page_urls):
-            if i > 0:
-                logger.info("Fetching page %d/%d…", i + 1, total_pages)
-                await page.goto(url, wait_until="networkidle", timeout=30000)
+        MAX_PAGES = 100  # safety cap against an infinite loop
+        page_num = 1
+        while page_num <= MAX_PAGES:
+            if page_num > 1:
+                logger.info("Fetching page %d…", page_num)
+                await page.goto(f"{BASE_URL}?page={page_num}", wait_until="networkidle", timeout=30000)
                 await asyncio.sleep(0.5)
 
             products = await page.evaluate(_EXTRACT_JS)
+            new_count = 0
             for p in products:
                 pid = str(p["id"])
                 if pid not in seen_ids:
                     seen_ids.add(pid)
                     all_raw.append(p)
+                    new_count += 1
+
+            logger.info("Page %d: %d product(s), %d new", page_num, len(products), new_count)
+
+            if page_num > 1 and new_count == 0:
+                logger.info("No new products on page %d — stopping.", page_num)
+                break
+
+            page_num += 1
 
         logger.info("Total products found: %d", len(all_raw))
         await browser.close()

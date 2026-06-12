@@ -174,34 +174,40 @@ async def run_scrape(on_progress=None) -> list[PhoneData]:
         except Exception:
             pass
 
-        # Detect max page from pagination links
-        max_page = await page.evaluate("""() => {
-            let max = 1;
-            document.querySelectorAll('a').forEach(a => {
-                const m = a.href.match(/telephone-portable\\/(\\d+)$/);
-                if (m) { const n = parseInt(m[1]); if (n > max) max = n; }
-            });
-            return max;
-        }""")
-        logger.info("Detected %d pages", max_page)
-
+        # Crawl pages until one yields no new products instead of trusting a max-page
+        # link — robust against both a stale over-count (empty page → wait_for_selector
+        # timeout → crash, losing the whole run) and an under-count read before
+        # pagination rendered (silent partial collection).
         all_raw: list[dict] = []
 
-        for page_num in range(1, max_page + 1):
+        MAX_PAGES = 100  # safety cap against an infinite loop
+        page_num = 1
+        while page_num <= MAX_PAGES:
             if page_num > 1:
                 url = f"{BASE_URL}{page_num}"
                 logger.info("Loading page %d: %s", page_num, url)
                 await page.goto(url, wait_until="domcontentloaded", timeout=30000)
-                await page.wait_for_selector("article.prod__article", timeout=15000)
+                try:
+                    await page.wait_for_selector("article.prod__article", timeout=15000)
+                except Exception:
+                    logger.info("No products on page %d — end of pagination.", page_num)
+                    break
                 await asyncio.sleep(1.5)
 
             page_raw: list[dict] = await page.evaluate(_EXTRACT_JS)
-            # Deduplicate across pages
+            new_count = 0
             for item in page_raw:
                 if item["id"] not in seen_ids:
                     seen_ids.add(item["id"])
                     all_raw.append(item)
-            logger.info("Page %d: %d products (total: %d)", page_num, len(page_raw), len(all_raw))
+                    new_count += 1
+            logger.info("Page %d: %d card(s), %d new (total: %d)", page_num, len(page_raw), new_count, len(all_raw))
+
+            if page_num > 1 and new_count == 0:
+                logger.info("No new products on page %d — stopping.", page_num)
+                break
+
+            page_num += 1
 
         await browser.close()
 

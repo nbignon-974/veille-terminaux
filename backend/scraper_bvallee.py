@@ -64,21 +64,6 @@ _EXTRACT_JS = """
 }
 """
 
-_MAX_PAGE_JS = """
-() => {
-    let maxPage = 1;
-    document.querySelectorAll('a[href*="p="]').forEach(link => {
-        const href = link.getAttribute('href') || '';
-        const match = href.match(/[?&]p=(\\d+)/);
-        if (match) {
-            const p = parseInt(match[1]);
-            if (p > maxPage) maxPage = p;
-        }
-    });
-    return maxPage;
-}
-"""
-
 _COLORS = {
     "noir", "blanc", "bleu", "rouge", "vert", "rose", "gris", "argent",
     "or", "violet", "jaune", "orange", "black", "white", "blue", "red",
@@ -193,28 +178,44 @@ async def run_scrape(on_progress=None) -> list[PhoneData]:
             await browser.close()
             raise
 
-        max_page = await page.evaluate(_MAX_PAGE_JS)
-        page_urls = [f"{BASE_URL}?p={p}" for p in range(1, max_page + 1)]
-
-        total_pages = len(page_urls)
-        logger.info("Found %d page(s) to scrape", total_pages)
-
+        # Crawl pages sequentially until one yields no (new) products, rather than
+        # trusting a max-page link — a stale "?p=N" link pointing past the last real
+        # page made the scraper request an empty page, time out on .c-productCard and
+        # crash the whole run (losing every product already collected). An empty page
+        # now simply marks the end of pagination.
         all_raw: list[dict] = []
         seen_ids: set[str] = set()
 
-        for i, url in enumerate(page_urls):
-            if i > 0:
-                logger.info("Fetching page %d/%d...", i + 1, total_pages)
-                await page.goto(url, wait_until="domcontentloaded", timeout=30000)
-                await page.wait_for_selector(".c-productCard", timeout=15000)
+        MAX_PAGES = 50  # safety cap against an infinite loop
+        page_num = 1
+        while page_num <= MAX_PAGES:
+            if page_num > 1:
+                logger.info("Fetching page %d...", page_num)
+                await page.goto(f"{BASE_URL}?p={page_num}", wait_until="domcontentloaded", timeout=30000)
+                try:
+                    await page.wait_for_selector(".c-productCard", timeout=15000)
+                except Exception:
+                    logger.info("No products on page %d — end of pagination.", page_num)
+                    break
                 await _trigger_lazy_prices(page)
 
             products = await page.evaluate(_EXTRACT_JS)
+            new_count = 0
             for p in products:
                 pid = str(p["id"])
                 if pid not in seen_ids:
                     seen_ids.add(pid)
                     all_raw.append(p)
+                    new_count += 1
+
+            logger.info("Page %d: %d card(s), %d new", page_num, len(products), new_count)
+
+            # End of catalogue (or a duplicate last page) once a page brings nothing new.
+            if page_num > 1 and new_count == 0:
+                logger.info("No new products on page %d — stopping.", page_num)
+                break
+
+            page_num += 1
 
         logger.info("Total products found: %d", len(all_raw))
         await browser.close()

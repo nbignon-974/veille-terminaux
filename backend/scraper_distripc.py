@@ -1,9 +1,10 @@
 """
 Playwright scraper for DistriPC (La Réunion) smartphone catalogue.
 
-Strategy: Algolia-powered e-commerce site with numbered pagination.
-Products listed at /21-telephonie, 16 per page, ?prod_distripc[page]=N for pages 1-7.
-Cards use .product-card, price in span.current-price, name in h6.card-title a.
+Strategy: standard PrestaShop catalogue with numbered pagination.
+Products listed at /21-telephonie, 16 per page, ?page=N.
+Cards use article.js-product-miniature; id in data-id-product, price in .price,
+full name in the image alt (the visible h4.card-title is CSS-truncated).
 Name format: "Téléphone portable BRAND Model - Version RAMGo / StorageGo / xG"
 """
 import asyncio
@@ -21,25 +22,26 @@ BASE_URL = "https://www.distripc.com/21-telephonie"
 
 _EXTRACT_JS = """
 () => {
-    const cards = document.querySelectorAll('.product-card');
     const products = [];
     const seen = new Set();
 
-    cards.forEach(card => {
-        const titleEl = card.querySelector('h6.card-title a');
-        if (!titleEl) return;
-
-        const name = (titleEl.getAttribute('title') || titleEl.textContent.trim());
-        const url = titleEl.href || '';
-
-        // Extract product ID from URL: /9978-gsm-samsung-...html
-        const idMatch = url.match(/\\/(\\d+)-[^/]+\\.html/);
-        const id = idMatch ? idMatch[1] : '';
+    document.querySelectorAll('article.js-product-miniature').forEach(card => {
+        // Product ID from the article's data attribute (reliable, no URL parsing)
+        const id = card.getAttribute('data-id-product') || '';
         if (!id || seen.has(id)) return;
-        seen.add(id);
+
+        const link = card.querySelector('h4.card-title a, .product-title a, a.product-thumbnail, a[href*=".html"]');
+        const url = link ? link.href.split('#')[0] : '';
+
+        // The visible h4 title is CSS-truncated ("..."); the image alt holds the full
+        // product name (incl. version/storage). Prefer alt, fall back to the link text.
+        const img = card.querySelector('.thumbnail img, img');
+        let name = img ? (img.getAttribute('alt') || '').trim() : '';
+        if (!name && link) name = link.textContent.trim();
+        if (!name) return;
 
         // Current price
-        const priceEl = card.querySelector('.current-price');
+        const priceEl = card.querySelector('.product-price-and-shipping .price, .price, .current-price');
         let price = null;
         if (priceEl) {
             const m = priceEl.textContent.replace(/\\u00a0/g, ' ').match(/([\\d\\s]+,\\d{2})/);
@@ -58,10 +60,10 @@ _EXTRACT_JS = """
             }
         }
 
-        // Image
-        const img = card.querySelector('.card-image img');
-        const imgUrl = img ? img.src : null;
+        // Image (full-size if available)
+        const imgUrl = img ? (img.getAttribute('data-full-size-image-url') || img.src) : null;
 
+        seen.add(id);
         products.push({ id, name, price, originalPrice, url, image: imgUrl });
     });
 
@@ -180,10 +182,16 @@ async def run_scrape(on_progress=None) -> list[PhoneData]:
         browser = await pw.chromium.launch(headless=True)
         page = await browser.new_page()
 
-        # Load page 1 (no param) to detect max pages
+        # DistriPC migrated from a custom Algolia layout (.product-card,
+        # ?prod_distripc[page]=N) to standard PrestaShop (article.js-product-miniature,
+        # ?page=N). Crawl pages until one yields no new products instead of trusting a
+        # max-page link — robust against both a stale over-count (empty page → crash)
+        # and an under-count read before pagination rendered (silent partial collection).
+        all_raw: list[dict] = []
+
         logger.info("Loading DistriPC catalogue page 1…")
         await page.goto(BASE_URL, wait_until="domcontentloaded", timeout=30000)
-        await page.wait_for_selector(".product-card", timeout=15000)
+        await page.wait_for_selector("article.js-product-miniature", timeout=15000)
         await asyncio.sleep(2)
 
         # Dismiss cookie consent if present
@@ -195,41 +203,34 @@ async def run_scrape(on_progress=None) -> list[PhoneData]:
         except Exception:
             pass
 
-        # Detect max page from pagination links
-        max_page = await page.evaluate("""() => {
-            let max = 1;
-            document.querySelectorAll('a').forEach(a => {
-                const m = a.href.match(/prod_distripc.*page.*=(\\d+)/);
-                if (m) { const n = parseInt(m[1]); if (n > max) max = n; }
-            });
-            return max;
-        }""")
-        logger.info("Detected %d pages", max_page)
+        MAX_PAGES = 100  # safety cap against an infinite loop
+        page_num = 1
+        while page_num <= MAX_PAGES:
+            if page_num > 1:
+                url = f"{BASE_URL}?page={page_num}"
+                logger.info("Loading page %d: %s", page_num, url)
+                await page.goto(url, wait_until="domcontentloaded", timeout=30000)
+                try:
+                    await page.wait_for_selector("article.js-product-miniature", timeout=15000)
+                except Exception:
+                    logger.info("No products on page %d — end of pagination.", page_num)
+                    break
+                await asyncio.sleep(1.5)
 
-        all_raw: list[dict] = []
-
-        # Page 1 (already loaded)
-        page_raw: list[dict] = await page.evaluate(_EXTRACT_JS)
-        for item in page_raw:
-            if item["id"] not in seen_ids:
-                seen_ids.add(item["id"])
-                all_raw.append(item)
-        logger.info("Page 1: %d products (total: %d)", len(page_raw), len(all_raw))
-
-        # Pages 2..max_page (param is 1-indexed but page 1 = first next page)
-        for page_num in range(2, max_page + 1):
-            url = f"{BASE_URL}?prod_distripc%5Bpage%5D={page_num}"
-            logger.info("Loading page %d: %s", page_num, url)
-            await page.goto(url, wait_until="domcontentloaded", timeout=30000)
-            await page.wait_for_selector(".product-card", timeout=15000)
-            await asyncio.sleep(1.5)
-
-            page_raw = await page.evaluate(_EXTRACT_JS)
+            page_raw: list[dict] = await page.evaluate(_EXTRACT_JS)
+            new_count = 0
             for item in page_raw:
                 if item["id"] not in seen_ids:
                     seen_ids.add(item["id"])
                     all_raw.append(item)
-            logger.info("Page %d: %d products (total: %d)", page_num, len(page_raw), len(all_raw))
+                    new_count += 1
+            logger.info("Page %d: %d card(s), %d new (total: %d)", page_num, len(page_raw), new_count, len(all_raw))
+
+            if page_num > 1 and new_count == 0:
+                logger.info("No new products on page %d — stopping.", page_num)
+                break
+
+            page_num += 1
 
         await browser.close()
 
