@@ -34,7 +34,7 @@ const COLOR_WORDS = new Set([
   "chrome", "sandstone", "volcanic", "glacial", "chromatic", "aqua",
   "meteor", "emerald", "sunrise", "navy", "teal", "peach", "copper",
   "beige", "indigo", "cream", "mint", "sky", "burgundy", "lime",
-  "aura", "platinum", "carbon", "crystal", "naturel",
+  "aura", "platinum", "carbon", "crystal", "naturel", "deep",
   // Variantes techniques non-différenciantes commercialement
   "esim",
 ]);
