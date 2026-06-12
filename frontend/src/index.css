@@ -662,6 +662,51 @@ body {
   padding: 1rem 1.25rem;
 }
 
+.pc-condition-toggle {
+  display: inline-flex;
+  margin-bottom: 0.85rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.pc-condition-toggle button {
+  background: var(--card-bg);
+  border: none;
+  padding: 0.4rem 0.95rem;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--text-light);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+.pc-condition-toggle button + button {
+  border-left: 1px solid var(--border);
+}
+.pc-condition-toggle button:hover:not(:disabled):not(.active) {
+  background: #f3f4f6;
+}
+.pc-condition-toggle button.active {
+  background: var(--accent);
+  color: #fff;
+}
+.pc-condition-toggle button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.pc-cond-count {
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 0.05rem 0.4rem;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.08);
+}
+.pc-condition-toggle button.active .pc-cond-count {
+  background: rgba(255, 255, 255, 0.25);
+}
+
 .pc-legend {
   display: flex;
   flex-wrap: wrap;

@@ -7,13 +7,37 @@ interface Props {
   phones: Phone[];
 }
 
+const isRefurbGroup = (g: { vendors: { phone: { is_refurbished: boolean } }[] }) =>
+  g.vendors.some((v) => v.phone.is_refurbished);
+
+// In the comparator the new/refurb split is already conveyed by the toggle, so
+// drop the redundant "(recond.)" suffix from the displayed model name.
+const displayLabel = (label: string) => label.replace(/\s*\(recond\.\)$/, "");
+
+// Cheapest "nu" price of a group — used to order references by price.
+const groupBestPrice = (g: { vendors: { priceNu: number | null }[] }) => {
+  const prices = g.vendors
+    .map((v) => v.priceNu)
+    .filter((p): p is number => p != null);
+  return prices.length ? Math.min(...prices) : Infinity;
+};
+
 export function PriceCompare({ phones }: Props) {
   const [hoveredKey, setHoveredKey] = useState<string | null>(null);
+  // Comparator-only condition switch — new is shown by default.
+  const [condition, setCondition] = useState<"new" | "refurb">("new");
+
+  const allGroups = useMemo(
+    () => groupPhones(phones).filter((g) => g.vendors.some((v) => v.priceNu != null)),
+    [phones],
+  );
+  const refurbCount = useMemo(() => allGroups.filter(isRefurbGroup).length, [allGroups]);
+  const newCount = allGroups.length - refurbCount;
 
   const { operatorKeys, groups, maxPrice } = useMemo(() => {
-    const groups = groupPhones(phones).filter((g) =>
-      g.vendors.some((v) => v.priceNu != null),
-    );
+    const groups = allGroups
+      .filter((g) => (isRefurbGroup(g) ? "refurb" : "new") === condition)
+      .sort((a, b) => groupBestPrice(b) - groupBestPrice(a)); // price desc
 
     const opSet = new Set<string>();
     let maxPrice = 0;
@@ -32,9 +56,9 @@ export function PriceCompare({ phones }: Props) {
     });
 
     return { operatorKeys, groups, maxPrice };
-  }, [phones]);
+  }, [allGroups, condition]);
 
-  if (groups.length === 0) {
+  if (allGroups.length === 0) {
     return (
       <p className="no-data" style={{ padding: "2rem" }}>
         Aucun prix à comparer. Affinez votre recherche.
@@ -42,9 +66,41 @@ export function PriceCompare({ phones }: Props) {
     );
   }
 
+  const conditionToggle = (
+    <div className="pc-condition-toggle">
+      <button
+        className={condition === "new" ? "active" : ""}
+        onClick={() => setCondition("new")}
+      >
+        Neuf <span className="pc-cond-count">{newCount}</span>
+      </button>
+      <button
+        className={condition === "refurb" ? "active" : ""}
+        onClick={() => setCondition("refurb")}
+        disabled={refurbCount === 0}
+      >
+        Reconditionné <span className="pc-cond-count">{refurbCount}</span>
+      </button>
+    </div>
+  );
+
+  if (groups.length === 0) {
+    return (
+      <div className="price-compare">
+        <div className="compare-chart-wrap">
+          {conditionToggle}
+          <p className="no-data" style={{ padding: "1.5rem 0" }}>
+            Aucun terminal {condition === "refurb" ? "reconditionné" : "neuf"} à comparer ici.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="price-compare">
       <div className="compare-chart-wrap">
+        {conditionToggle}
         <div className="pc-legend">
           {operatorKeys.map((op) => (
             <span key={op} className="pc-legend-item">
@@ -66,7 +122,7 @@ export function PriceCompare({ phones }: Props) {
                   onMouseEnter={() => setHoveredKey(g.key)}
                   onMouseLeave={() => setHoveredKey(null)}
                 >
-                  {g.label}
+                  {displayLabel(g.label)}
                   <span className="pc-count">×{nuVendors.length}</span>
                   {hoveredKey === g.key && (
                     <div className="pc-popover">
@@ -145,7 +201,7 @@ export function PriceCompare({ phones }: Props) {
             return (
               <tr key={g.label}>
                 <td className="compare-model">
-                  <div className="compare-model-text">{g.label}</div>
+                  <div className="compare-model-text">{displayLabel(g.label)}</div>
                 </td>
                 {operatorKeys.map((op) => {
                   const v = g.vendors.find((x) => x.operator === op);
