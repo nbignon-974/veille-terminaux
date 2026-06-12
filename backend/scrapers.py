@@ -175,6 +175,14 @@ def persist_results(results: list[PhoneData], db, scrape_run_id: int, operator: 
             db.add(phone)
             db.flush()
         else:
+            # Refresh descriptive fields too, so improved parsing or a vendor's
+            # renamed product propagates to existing records (otherwise a phone
+            # keeps its first-ever name/model forever).
+            phone.name = data.name
+            phone.brand = data.brand
+            phone.model = data.model
+            phone.storage = data.storage
+            phone.color = data.color
             phone.image_url = data.image_url or phone.image_url
             phone.page_url = data.page_url or phone.page_url
             phone.product_type = data.product_type
