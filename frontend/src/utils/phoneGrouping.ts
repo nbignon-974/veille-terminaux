@@ -21,7 +21,7 @@ const COLOR_WORDS = new Set([
   "cosmique", "sidéral", "sideral", "profond", "intense", "clair",
   "foncé", "fonce", "mat", "mate", "métallique", "metallique",
   "anthracite", "charbon", "carbone", "mocha", "moka", "ultramarine",
-  "ultramarin", "sahara", "canyon",
+  "ultramarin", "outremer", "sarcelle", "stellar", "space", "sahara", "canyon",
   // EN de base
   "black", "white", "blue", "red", "green", "yellow", "pink", "purple",
   "gray", "grey", "silver", "gold",
@@ -34,10 +34,17 @@ const COLOR_WORDS = new Set([
   "chrome", "sandstone", "volcanic", "glacial", "chromatic", "aqua",
   "meteor", "emerald", "sunrise", "navy", "teal", "peach", "copper",
   "beige", "indigo", "cream", "mint", "sky", "burgundy", "lime",
-  "aura", "platinum", "carbon", "crystal",
+  "aura", "platinum", "carbon", "crystal", "naturel",
   // Variantes techniques non-différenciantes commercialement
   "esim",
 ]);
+
+// Strip diacritics so ASCII regex word-boundaries work (JS \b doesn't treat "é"
+// as a word char, so e.g. "\brefé\b" never matches) and so accented colours
+// still match after the model text is de-accented.
+const deaccent = (s: string): string =>
+  s.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+const COLOR_WORDS_NA = new Set(Array.from(COLOR_WORDS, deaccent));
 
 const STORAGE_RE = /(\d+)\s*(g[ob]|to)\b/gi;
 const KNOWN_BARE_STORAGES = [1024, 512, 256, 128, 64];
@@ -80,16 +87,116 @@ export function stripColorWords(text: string): string {
     .trim();
 }
 
+// Descriptive noise that varies between vendors for the SAME phone: screen size,
+// OS, connector, SIM type, warranty/condition blurbs, RAM specs, trailing "…".
+// Removed before keying so e.g. leclic's
+//   'iphone 16 pro max 17,5 cm (6.9") double sim ios 18 usb type-c'
+// keys the same as Orange's "iPhone 16 Pro Max 256 Go".
+// Significant tokens (pro / max / plus / ultra / mini / fe / 4g / 5g …) are kept,
+// so distinct products are never merged.
+const NOISE_RE = new RegExp(
+  [
+    "\\(.*?\\)", // parentheticals e.g. (6.9")
+    "\\d+[.,]\\d+\\s*cm", // screen size 17,5 cm
+    "\\d+[.,]\\d+\\s*\"", // inches 6.9"
+    "\\bios\\s*\\d+\\b",
+    "\\bandroid\\s*\\d+\\b",
+    "\\busb\\s*type-?c\\b",
+    "\\btype-?c\\b",
+    "\\bdouble\\s*sim\\b",
+    "\\bdual\\s*sim\\b",
+    "\\bnano\\s*sim\\b",
+    "\\be?sim\\b",
+    "\\bsmartphones?\\b",
+    "\\bt[ée]l[ée]phones?\\b",
+    "\\bgarantie\\b.*", // warranty blurb to end of string
+    "\\bgrade\\s*[a-c]\\+?\\b", // "grade A+", "grade B"
+    "\\b[a-c]\\+", // standalone refurbished grade "A+/B+/C+" (never matches S26+/Pro+)
+    "\\b[a-d]\\b", // lone grade letter ("… 128 Go A") — no phone model is a bare a/b/c/d
+    "\\brec(onditionn[ée])?\\b",
+    "\\brenewed\\b",
+    "\\brefurb\\w*\\b",
+    "\\bref[ée]\\b",
+    "\\boccasion\\b",
+    "\\d+\\s*/\\s*\\d*\\s*(go|gb)?", // RAM spec 6/128, 8/256 go, truncated 6/
+    "\\bram\\b",
+    "\\d+\\s*mah\\b", // battery capacity 5000 mAh
+    "\\bgsm\\b",
+    "\\.\\.\\.", // trailing ellipsis
+  ].join("|"),
+  "gi",
+);
+
+const BRAND_ALIASES: Record<string, string> = {
+  // Some vendors put "iPhone" in the brand column instead of "Apple".
+  iphone: "apple",
+};
+
+export function normalizeBrand(brand: string): string {
+  const b = brand.toLowerCase().trim();
+  return BRAND_ALIASES[b] ?? b;
+}
+
+const KNOWN_BRANDS = new Set([
+  "apple", "samsung", "xiaomi", "honor", "huawei", "google", "oppo",
+  "motorola", "crosscall", "nokia", "realme", "oneplus", "nothing", "cmf",
+  "fairphone", "vivo", "sony", "asus", "poco", "tcl", "wiko", "doro", "zte",
+  "blackview", "ulefone", "beafon", "oscal", "redmi", "nubia",
+]);
+
+// When the parsed brand is junk (e.g. Ravate puts "ReFé" — a reseller tag — in
+// the brand column for some refurbished items), infer it from the model name.
+const MODEL_BRAND_HINTS: [RegExp, string][] = [
+  [/\biphone\b/i, "apple"],
+  [/\bgalaxy\b/i, "samsung"],
+  [/\b(redmi|poco)\b/i, "xiaomi"],
+  [/\bpixel\b/i, "google"],
+  [/\b(moto|razr)\b/i, "motorola"],
+];
+
+export function resolveBrand(p: Phone): string {
+  const b = normalizeBrand(p.brand);
+  if (KNOWN_BRANDS.has(b)) return b;
+  for (const [re, brand] of MODEL_BRAND_HINTS) {
+    if (re.test(p.model)) return brand;
+  }
+  return b;
+}
+
+/**
+ * Canonical model string used for grouping. Strips vendor-specific descriptive
+ * noise and colours, and turns "+" (Plus variant) into a "plus" token so e.g.
+ * "Galaxy S26+" never collapses onto "Galaxy S26". Case is preserved so the
+ * result doubles as a display label; the key lower-cases it.
+ */
+export function cleanModel(text: string): string {
+  // De-accent first so ASCII regexes (and the JS \b boundary) behave; "ReFé" and
+  // "reconditionné" only get stripped once they are "refe"/"reconditionne".
+  let t = deaccent(text);
+  t = t.replace(/\bpro\s*max\b/gi, "pro max"); // unify "ProMax" / "Pro  Max"
+  // Strip noise (incl. refurbished grade markers like "A+") BEFORE turning a
+  // model "+" into "plus", otherwise "A+" would survive as a stray "a plus".
+  t = t.replace(NOISE_RE, " ");
+  t = t.replace(/\+/g, " plus ");
+  t = t
+    .split(/[\s,;./\-()]+/)
+    .filter((w) => w && !COLOR_WORDS_NA.has(w.toLowerCase()))
+    .join(" ");
+  return t.replace(/\s+/g, " ").trim();
+}
+
 export function resolveStorageAndModel(p: Phone): { storage: string; model: string } {
   const fromModel = extractStorageFromText(p.model);
   const storage = normalizeStorage(p.storage) || fromModel.storage || "";
-  const model = stripColorWords(fromModel.cleaned);
+  const model = cleanModel(fromModel.cleaned);
   return { storage, model };
 }
 
 export function normalizeKey(p: Phone): string {
   const { storage, model } = resolveStorageAndModel(p);
-  return `${p.brand.toLowerCase().trim()}|${model.toLowerCase()}|${storage}`;
+  // New and refurbished are never compared together (different products/prices).
+  const condition = p.is_refurbished ? "refurb" : "new";
+  return `${resolveBrand(p)}|${model.toLowerCase()}|${storage}|${condition}`;
 }
 
 export function shortLabel(p: Phone): string {
@@ -101,7 +208,8 @@ export function shortLabel(p: Phone): string {
     : toMatch
     ? `${toMatch[1]} To`
     : storage;
-  return [model, storageLabel].filter(Boolean).join(" ");
+  const base = [model, storageLabel].filter(Boolean).join(" ");
+  return p.is_refurbished ? `${base} (recond.)` : base;
 }
 
 /** Orange forfait "grand public" price extraction. */
