@@ -89,6 +89,7 @@ body {
 .operator-tabs button:hover {
   border-color: rgba(255,255,255,0.5);
   color: white;
+  box-shadow: inset 0 0 0 999px rgba(255,255,255,0.14);
 }
 .operator-tabs button.active {
   background: var(--accent);
@@ -114,6 +115,7 @@ body {
 .product-type-tabs button:hover {
   border-color: rgba(255,255,255,0.5);
   color: white;
+  box-shadow: inset 0 0 0 999px rgba(255,255,255,0.14);
 }
 .product-type-tabs button.active {
   background: rgba(255,255,255,0.15);
@@ -352,13 +354,25 @@ body {
   font-size: 0.9rem;
   font-weight: 600;
   cursor: pointer;
-  transition: opacity 0.15s;
+  transition: opacity 0.15s, box-shadow 0.15s;
   white-space: nowrap;
+}
+
+/* Hover: a translucent white film lightens any background (orange, dark, …)
+   uniformly — no movement, no glow, base colour untouched. */
+.scrape-btn:hover:not(:disabled) {
+  box-shadow: inset 0 0 0 999px rgba(255, 255, 255, 0.16);
 }
 
 .scrape-btn:disabled {
   opacity: 0.6;
   cursor: not-allowed;
+}
+
+.scrape-btn-all {
+  background: var(--dark);
+  color: var(--accent);
+  border: 1px solid var(--accent);
 }
 
 .scrape-btn-orange {
@@ -937,6 +951,7 @@ body {
 .view-tabs button:hover {
   border-color: rgba(255,255,255,0.55);
   color: white;
+  box-shadow: inset 0 0 0 999px rgba(255,255,255,0.14);
 }
 .view-tabs button.active {
   background: rgba(255,255,255,0.95);
@@ -952,6 +967,11 @@ body {
   background: #d6f5e1;
   color: #047857;
   border-color: #d6f5e1;
+}
+/* The white active tab can't get lighter — darken it slightly on hover instead
+   (the coloured win/lose tabs keep the lightening film). */
+.view-tabs button.active:not(.view-tab-lose):not(.view-tab-win):hover {
+  box-shadow: inset 0 0 0 999px rgba(0,0,0,0.08);
 }
 
 /* ── Orange Arbitrage view ── */

@@ -181,10 +181,13 @@ class ScrapeHealthOut(BaseModel):
 
 # ─── Background task ─────────────────────────────────────────────────────────
 
-async def _do_scrape(run_id: int, operator: str):
-    from database import SessionLocal
+async def _scrape_one(run_id: int, operator: str, db: Session):
+    """Run a single operator's scraper against an existing ScrapeRun row.
 
-    db: Session = SessionLocal()
+    Drives the run status running → done/error, persists results and updates
+    live progress. Never raises: a failure is recorded on the run so a caller
+    looping over several operators is not interrupted by one broken scraper.
+    """
     try:
         run = db.query(ScrapeRun).filter(ScrapeRun.id == run_id).first()
         if not run:
@@ -214,7 +217,10 @@ async def _do_scrape(run_id: int, operator: str):
         _progress.pop(run_id, None)
 
     except Exception as e:
-        logger.exception("Scrape run %d failed", run_id)
+        logger.exception("Scrape run %d (%s) failed", run_id, operator)
+        # Roll back any half-applied transaction before recording the error,
+        # otherwise the status update itself could fail.
+        db.rollback()
         run = db.query(ScrapeRun).filter(ScrapeRun.id == run_id).first()
         if run:
             run.status = "error"
@@ -222,8 +228,30 @@ async def _do_scrape(run_id: int, operator: str):
             run.finished_at = datetime.now(timezone.utc)
             db.commit()
         _progress.pop(run_id, None)
+
+
+async def _do_scrape(run_id: int, operator: str):
+    from database import SessionLocal
+
+    db: Session = SessionLocal()
+    try:
+        await _scrape_one(run_id, operator, db)
     finally:
         db.close()
+
+
+async def _do_scrape_all(items: list[tuple[int, str]]):
+    """Run several operators' scrapers sequentially (one browser in memory at a
+    time — required on the 512 MB Render free plan). Each operator gets its own
+    DB session so a failure can't leave the session dirty for the next one."""
+    from database import SessionLocal
+
+    for run_id, operator in items:
+        db: Session = SessionLocal()
+        try:
+            await _scrape_one(run_id, operator, db)
+        finally:
+            db.close()
 
 
 # ─── Endpoints ───────────────────────────────────────────────────────────────
@@ -347,6 +375,36 @@ async def start_scrape(operator: str = "sfr_re", db: Session = Depends(get_db)):
     asyncio.create_task(_do_scrape(run.id, operator))
 
     return run
+
+
+# Operators with an actual scraper (orange_re is a manual CSV import, not scraped).
+SCRAPABLE_OPERATORS = [op for op in OPERATORS if op != "orange_re"]
+
+
+@app.post("/scrape/all", response_model=list[ScrapeRunOut], status_code=202)
+async def start_scrape_all(db: Session = Depends(get_db)):
+    """Launch a collection for every scrapable operator, run sequentially in the
+    background. Returns one ScrapeRun per operator (poll /scrape/runs to track)."""
+    # Refuse if anything is already running (a parallel batch would risk OOM).
+    active = db.query(ScrapeRun).filter(
+        ScrapeRun.status.in_(["pending", "running"])
+    ).first()
+    if active:
+        raise HTTPException(
+            status_code=409,
+            detail=f"A scrape run is already in progress (id={active.id})",
+        )
+
+    runs = [ScrapeRun(status="pending", operator=op) for op in SCRAPABLE_OPERATORS]
+    db.add_all(runs)
+    db.commit()
+    for r in runs:
+        db.refresh(r)
+
+    items = [(r.id, r.operator) for r in runs]
+    asyncio.create_task(_do_scrape_all(items))
+
+    return runs
 
 
 @app.get("/scrape/runs", response_model=list[ScrapeRunOut])

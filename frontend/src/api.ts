@@ -108,6 +108,8 @@ export const api = {
   startScrape: (operator: string = "sfr_re") =>
     apiFetch<ScrapeRun>(`/scrape?operator=${encodeURIComponent(operator)}`, { method: "POST" }),
 
+  startScrapeAll: () => apiFetch<ScrapeRun[]>(`/scrape/all`, { method: "POST" }),
+
   getScrapeStatus: (runId: number) =>
     apiFetch<ScrapeStatus>(`/scrape/${runId}`),
 
