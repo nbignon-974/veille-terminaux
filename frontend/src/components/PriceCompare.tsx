@@ -14,12 +14,13 @@ const isRefurbGroup = (g: { vendors: { phone: { is_refurbished: boolean } }[] })
 // drop the redundant "(recond.)" suffix from the displayed model name.
 const displayLabel = (label: string) => label.replace(/\s*\(recond\.\)$/, "");
 
-// Cheapest "nu" price of a group — used to order references by price.
-const groupBestPrice = (g: { vendors: { priceNu: number | null }[] }) => {
+// Highest "nu" price of a group — used to order references by price (so e.g.
+// "Pro Max 1 To" ranks above "Pro 1 To" even if the latter has a cheaper offer).
+const groupTopPrice = (g: { vendors: { priceNu: number | null }[] }) => {
   const prices = g.vendors
     .map((v) => v.priceNu)
     .filter((p): p is number => p != null);
-  return prices.length ? Math.min(...prices) : Infinity;
+  return prices.length ? Math.max(...prices) : 0;
 };
 
 export function PriceCompare({ phones }: Props) {
@@ -37,7 +38,7 @@ export function PriceCompare({ phones }: Props) {
   const { operatorKeys, groups, maxPrice } = useMemo(() => {
     const groups = allGroups
       .filter((g) => (isRefurbGroup(g) ? "refurb" : "new") === condition)
-      .sort((a, b) => groupBestPrice(b) - groupBestPrice(a)); // price desc
+      .sort((a, b) => groupTopPrice(b) - groupTopPrice(a)); // by highest price, desc
 
     const opSet = new Set<string>();
     let maxPrice = 0;
