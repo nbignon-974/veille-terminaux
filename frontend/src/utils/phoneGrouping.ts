@@ -196,7 +196,23 @@ export function normalizeKey(p: Phone): string {
   const { storage, model } = resolveStorageAndModel(p);
   // New and refurbished are never compared together (different products/prices).
   const condition = p.is_refurbished ? "refurb" : "new";
-  return `${resolveBrand(p)}|${model.toLowerCase()}|${storage}|${condition}`;
+  const brand = resolveBrand(p);
+
+  let keyModel = model.toLowerCase();
+  if (brand === "samsung") {
+    // "Galaxy" is Samsung's line name and is omitted by some vendors — drop it
+    // so "Galaxy S26 Ultra" and "S26 Ultra" group together (the rest is unique
+    // within Samsung). The display label keeps "Galaxy".
+    keyModel = keyModel.replace(/\bgalaxy\b/g, "");
+    // S-series and Z Flip/Fold are 5G-only, so "5G" is redundant — drop it there.
+    // Keep it on A/M series, which have genuine 4G vs 5G variants.
+    if (/\bs\d/.test(keyModel) || /\bz\s*(flip|fold)/.test(keyModel)) {
+      keyModel = keyModel.replace(/\b5g\b/g, "");
+    }
+    keyModel = keyModel.replace(/\s+/g, " ").trim();
+  }
+
+  return `${brand}|${keyModel}|${storage}|${condition}`;
 }
 
 export function shortLabel(p: Phone): string {
