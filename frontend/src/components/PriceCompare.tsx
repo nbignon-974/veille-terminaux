@@ -153,7 +153,7 @@ export function PriceCompare({ phones }: Props) {
                 <div className="pc-bars">
                   {nuVendors
                     .slice()
-                    .sort((a, b) => (a.priceNu ?? 0) - (b.priceNu ?? 0))
+                    .sort((a, b) => (b.priceNu ?? 0) - (a.priceNu ?? 0))
                     .map((v) => (
                       <div className="pc-bar-row" key={v.operator}>
                         <div
